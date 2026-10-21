@@ -1,0 +1,9 @@
+# Personal settings (paths on this machine); .env.example is the template.
+.env
+
+# Generated files
+outputs/
+node_modules/
+dist/
+__pycache__/
+*.pyc

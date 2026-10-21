@@ -1,0 +1,60 @@
+# syntax=docker/dockerfile:1.7
+#
+# GPU workers. One Dockerfile, one target per tool:
+#   base          Python 3.12 + ffmpeg + torch 2.8.0 (CUDA 12.8, needed by the RTX 50 series)
+#   whisperx      transcription
+#   stable-audio  SFX / music generation
+#   tts           Kokoro text to speech
+# Every tool image starts from the same base layers, so torch is stored on disk once.
+# Build one tool with: docker compose build <tool>
+
+FROM python:3.12-slim-bookworm AS base
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_LINK_MODE=copy \
+    UV_HTTP_TIMEOUT=600 \
+    PYTHONDONTWRITEBYTECODE=1
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/astral-sh/uv:0.12.10 /uv /usr/local/bin/uv
+COPY common/torch-constraints.txt /etc/toolbox/torch-constraints.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --index-url https://download.pytorch.org/whl/cu128 -r /etc/toolbox/torch-constraints.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install fastapi==0.156.4 uvicorn==0.54.0
+WORKDIR /app
+COPY common/toolbox_worker.py /app/
+EXPOSE 8000
+HEALTHCHECK --interval=15s --timeout=5s --start-period=120s \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)"
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "warning"]
+
+# Install a tool's pinned requirements without ever replacing the base torch build.
+# No extra index here on purpose: torch and its CUDA wheels are already installed, and
+# letting uv see them in a second index made it reinstall ~6 GB per tool (no layer sharing).
+# (Packages are pinned from the Windows environments that already worked on this GPU.)
+
+FROM base AS whisperx
+COPY whisperx/requirements.txt /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -r /tmp/requirements.txt -c /etc/toolbox/torch-constraints.txt
+# faster-whisper (CTranslate2) loads cuDNN/cuBLAS from the pip wheels torch brought in.
+ENV LD_LIBRARY_PATH=/usr/local/lib/python3.12/site-packages/nvidia/cudnn/lib:/usr/local/lib/python3.12/site-packages/nvidia/cublas/lib
+COPY whisperx/server.py /app/
+
+FROM base AS stable-audio
+COPY stable-audio/requirements.txt /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -r /tmp/requirements.txt -c /etc/toolbox/torch-constraints.txt
+COPY stable-audio/server.py /app/
+
+FROM base AS tts
+# espeak-ng: Kokoro's phonemizer for the non-English voices.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends espeak-ng \
+ && rm -rf /var/lib/apt/lists/*
+COPY tts/requirements.txt /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -r /tmp/requirements.txt -c /etc/toolbox/torch-constraints.txt \
+ && python -m spacy download en_core_web_sm
+COPY tts/server.py /app/

@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1.7
+#
+# Render worker (CPU): HyperFrames (Node) + its pinned headless Chrome + ffmpeg,
+# wrapped by the same small Python worker server as the GPU tools.
+
+FROM node:22-bookworm-slim
+ENV DO_NOT_TRACK=1 \
+    PYTHONDONTWRITEBYTECODE=1
+# chromium is installed for its system libraries and fonts; HyperFrames downloads
+# and uses its own pinned Chrome build (below) so renders match other machines.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ffmpeg python3 python3-venv ca-certificates chromium \
+      fonts-liberation fonts-noto-core fonts-noto-color-emoji fonts-dejavu-core \
+ && rm -rf /var/lib/apt/lists/*
+ARG HYPERFRAMES_VERSION=0.8.181
+RUN npm install -g hyperframes@${HYPERFRAMES_VERSION} && npm cache clean --force
+RUN python3 -m venv /opt/venv \
+ && /opt/venv/bin/pip install --no-cache-dir fastapi==0.156.4 uvicorn==0.54.0
+ENV PATH=/opt/venv/bin:$PATH
+
+# Run as the image's unprivileged user: Chrome refuses to sandbox as root.
+USER node
+RUN hyperframes browser ensure
+WORKDIR /app
+COPY --chown=node:node common/toolbox_worker.py render/server.py /app/
+EXPOSE 8000
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)"
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "warning"]

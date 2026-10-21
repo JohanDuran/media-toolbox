@@ -1,0 +1,2 @@
+# Keep LF everywhere: Dockerfiles and the shell lines inside them break with CRLF.
+* text=auto eol=lf

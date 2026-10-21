@@ -1,0 +1,108 @@
+# Media toolbox: one gateway (dashboard + REST + MCP) in front of one worker per tool.
+#
+#   docker compose up -d --build          build and start everything
+#   docker compose build whisperx         rebuild one tool
+#   docker compose up -d whisperx         restart one tool
+#   docker compose logs -f gateway        follow one service's log
+#
+# Settings come from .env next to this file.
+
+x-host-mounts: &host-mounts
+  # Your user folder, read-write: inputs are read from it and outputs written back.
+  # The gateway refuses to write into PROTECTED_DIRS (the OBS folder).
+  - ${HOST_HOME:?copy .env.example to .env and set HOST_HOME}:/host
+  # Small caches that don't belong in your user folder (nltk data, npm, etc.).
+  - toolbox-cache:/cache
+
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu, utility, compute]
+
+x-worker-env: &worker-env
+  # Model weights live in your normal Hugging Face / torch caches, so they are
+  # downloaded once and shared with anything else on the machine.
+  HF_HOME: /host/.cache/huggingface
+  TORCH_HOME: /host/.cache/torch
+  NLTK_DATA: /cache/nltk_data
+  HF_HUB_DISABLE_SYMLINKS_WARNING: "1"
+  PYTHONUNBUFFERED: "1"
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    image: media-toolbox/gateway
+    ports:
+      - "127.0.0.1:${PORT}:8765"
+    volumes: *host-mounts
+    environment:
+      HOST_HOME: ${HOST_HOME}
+      OUTPUTS_DIR: ${OUTPUTS_DIR}
+      SFX_LIBRARY: ${SFX_LIBRARY}
+      PROTECTED_DIRS: ${PROTECTED_DIRS}
+      PUBLIC_URL: http://localhost:${PORT}
+      DB_PATH: /cache/gateway/jobs.sqlite
+      PYTHONUNBUFFERED: "1"
+    # GPU access only so the dashboard can read nvidia-smi; the gateway runs no models.
+    <<: *gpu
+    restart: unless-stopped
+    depends_on: [whisperx, stable-audio, tts, render]
+
+  whisperx:
+    build:
+      context: workers
+      dockerfile: Dockerfile.gpu
+      target: whisperx
+    image: media-toolbox/whisperx
+    volumes: *host-mounts
+    environment:
+      <<: *worker-env
+      # WhisperX models are public; an expired saved token makes downloads fail with 401.
+      HF_HUB_DISABLE_IMPLICIT_TOKEN: "1"
+    <<: *gpu
+    restart: unless-stopped
+
+  stable-audio:
+    build:
+      context: workers
+      dockerfile: Dockerfile.gpu
+      target: stable-audio
+    image: media-toolbox/stable-audio
+    volumes: *host-mounts
+    # Stable Audio Open is gated: it uses the token saved in HF_HOME by `hf auth login`.
+    environment: *worker-env
+    <<: *gpu
+    restart: unless-stopped
+
+  tts:
+    build:
+      context: workers
+      dockerfile: Dockerfile.gpu
+      target: tts
+    image: media-toolbox/tts
+    volumes: *host-mounts
+    environment: *worker-env
+    <<: *gpu
+    restart: unless-stopped
+
+  render:
+    build:
+      context: workers
+      dockerfile: Dockerfile.render
+    image: media-toolbox/render
+    volumes: *host-mounts
+    environment:
+      PYTHONUNBUFFERED: "1"
+      DO_NOT_TRACK: "1"
+      HYPERFRAMES_TELEMETRY_DISABLED: "1"
+    shm_size: "2gb"   # Chrome needs more than Docker's 64 MB default
+    restart: unless-stopped
+
+volumes:
+  toolbox-cache:
