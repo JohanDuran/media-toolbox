@@ -2,6 +2,7 @@ import { api } from "./api";
 import Jobs from "./pages/Jobs";
 import Overview from "./pages/Overview";
 import Run from "./pages/Run";
+import Shorts from "./pages/Shorts";
 import Sounds from "./pages/Sounds";
 import { useHashRoute, usePoll } from "./util";
 
@@ -10,6 +11,7 @@ const TABS = [
   ["jobs", "Jobs"],
   ["run", "Run a tool"],
   ["sounds", "Sound library"],
+  ["shorts", "Shorts"],
 ] as const;
 
 export default function App() {
@@ -44,6 +46,7 @@ export default function App() {
         {page === "jobs" && <Jobs selected={route[1]} />}
         {page === "run" && <Run toolName={route[1]} />}
         {page === "sounds" && <Sounds />}
+        {page === "shorts" && <Shorts project={route[1]} />}
       </main>
     </div>
   );

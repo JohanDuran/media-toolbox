@@ -215,3 +215,17 @@ summary { cursor: pointer; color: var(--muted); font-size: 12px; }
   .brand span:last-child, .conn { display: none; }
   main { padding: 16px; }
 }
+
+/* shorts */
+.shorts-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.shot { padding: 10px; display: flex; flex-direction: column; gap: 4px; }
+.shot img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 6px; background: #000; display: block; }
+.shot-empty { aspect-ratio: 9 / 16; border-radius: 6px; background: var(--surface-2); display: grid; place-items: center; color: var(--muted); font-size: 12px; }
+.shot-name { font-weight: 600; font-size: 12px; overflow-wrap: anywhere; }
+.shot-note { color: var(--muted); line-height: 1.35; }
+.shot .row { margin-top: auto; justify-content: space-between; }
+.shorts-bottom { grid-template-columns: minmax(260px, 360px) 1fr; }
+.short-video { width: 100%; aspect-ratio: 9 / 16; background: #000; border-radius: 8px; }
+.sheet { width: 100%; border-radius: 8px; }
+.anchors { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 900px) { .shorts-bottom { grid-template-columns: 1fr; } }

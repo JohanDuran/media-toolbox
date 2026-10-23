@@ -118,6 +118,44 @@ def _prep_ffmpeg(p: dict) -> dict:
     return p
 
 
+def _spec_path(p: dict) -> str:
+    """Validate a Shorts project up front (clear errors before the job is queued)."""
+    import shorts_spec
+    from pathlib import Path
+
+    spec = f"{p['project_dir'].rstrip('/')}/short.json"
+    if not Path(spec).exists():
+        raise ValueError(f"no short.json in {p['project_dir']} (see the Shorts spec in the toolbox README)")
+    check_writable(p["project_dir"])
+    shorts_spec.Spec(Path(spec)).shots()  # raises SpecError with a readable message
+    return spec
+
+
+def _prep_short_build(p: dict) -> dict:
+    p["spec"] = _spec_path(p)
+    bad = set(p.get("parts") or []) - {"shots", "overlay", "audio"}
+    if bad:
+        raise ValueError(f"unknown part(s) {sorted(bad)}; use shots, overlay, audio")
+    return p
+
+
+def _prep_short_preview(p: dict) -> dict:
+    p["spec"] = _spec_path(p)
+    return p
+
+
+def _prep_short_frames(p: dict) -> dict:
+    p["times"] = [float(t) for t in p["times"]]
+    if p.get("region"):
+        p["region"] = [int(float(v)) for v in p["region"]]
+        if len(p["region"]) != 4:
+            raise ValueError("region must be 4 numbers: x y w h")
+    if not p.get("out"):
+        stem = p["src"].rstrip("/").rsplit("/", 1)[-1].rsplit(".", 1)[0]
+        p["out"] = f"{_out('frames')}/{_slug(stem, 40)}_{time.strftime('%Y%m%d-%H%M%S')}.png"
+    return p
+
+
 TOOLS: dict[str, Tool] = {t.name: t for t in [
     Tool(
         "transcribe", "Transcribe", "whisperx", "transcribe", True,
@@ -206,6 +244,38 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
         "ffprobe", "ffprobe", "render", "ffprobe", False,
         "Read a media file's format and streams as JSON.",
         [Param("path", "path_in", "Media file", True)],
+    ),
+    Tool(
+        "short_build", "Build Short", "render", "short_build", False,
+        "Build a vertical Short (1080x1920) from the project's short.json: one MP4 per shot (V1), the graphics "
+        "and captions overlay (V2, transparent), the leveled narration (A1) and the music/SFX bed (A2). Returns "
+        "where each file goes on the Resolve timeline.",
+        [
+            Param("project_dir", "dir_in", "Project folder", True, help="Folder with short.json"),
+            Param("parts", "strings", "Parts", help="shots overlay audio (blank = all)"),
+            Param("only", "strings", "Only these shots", help="Shot names, e.g. s04_folder (blank = all)"),
+        ],
+        prepare=_prep_short_build,
+    ),
+    Tool(
+        "short_preview", "Preview Short", "render", "short_preview", False,
+        "Composite the built shots, overlay and audio into edit/preview.mp4, plus a contact sheet with one frame "
+        "per shot (edit/preview_sheet.jpg). Build first.",
+        [Param("project_dir", "dir_in", "Project folder", True, help="Folder with short.json")],
+        prepare=_prep_short_preview,
+    ),
+    Tool(
+        "short_frames", "Frame grid", "render", "short_frames", False,
+        "Grab frames from a recording at given seconds into one labelled grid image, to find crop regions "
+        "and the right moments for a Short.",
+        [
+            Param("src", "path_in", "Recording", True),
+            Param("times", "strings", "Times (s)", True, help="e.g. 10 12.5 15"),
+            Param("region", "strings", "Crop region", help="x y w h on the recording (blank = whole frame)"),
+            Param("cols", "integer", "Columns", default=4),
+            Param("out", "path_out", "Output .png", help=f"Blank = {OUTPUTS_DIR}\\frames"),
+        ],
+        prepare=_prep_short_frames,
     ),
 ]}
 

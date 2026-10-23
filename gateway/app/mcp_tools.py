@@ -11,7 +11,7 @@ from typing import Literal
 
 from mcp.server.fastmcp import FastMCP
 
-from . import library
+from . import library, shorts
 from .config import PUBLIC_URL, SFX_LIBRARY
 from .paths import PathError, windows
 from .runner import Runner
@@ -20,7 +20,8 @@ INSTRUCTIONS = f"""Local media toolbox (free, runs on this PC's GPU in Docker). 
 anything under the user's home folder works. Outputs never go into the OBS folder.
 Tools: transcribe (WhisperX), timeline_transcript, sfx_search / sfx_generate / sfx_mark / sfx_scan
 (Stable Audio + shared sound library at {windows(SFX_LIBRARY)}), speak (Kokoro TTS),
-render_hyperframes, ffmpeg, ffprobe, plus job_status / wait_for_job / list_jobs / cancel_job.
+render_hyperframes, ffmpeg, ffprobe, vertical Shorts from a short.json spec (short_info / short_build /
+short_preview / short_frames), plus job_status / wait_for_job / list_jobs / cancel_job.
 Search the sound library before generating. Dashboard: {PUBLIC_URL}"""
 
 
@@ -152,6 +153,40 @@ def build_mcp(runner: Runner) -> FastMCP:
     async def ffprobe(path: str) -> dict:
         """A media file's format and streams (codec, duration, resolution, audio tracks...)."""
         return await run("ffprobe", {"path": path}, 120)
+
+    @mcp.tool()
+    async def short_info(project_dir: str) -> dict:
+        """Read a Shorts project's short.json: its length, every shot with start/end/record frame (as the
+        narration currently times them), the graphics, and which outputs are already built. Instant."""
+        try:
+            return shorts.info(project_dir)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @mcp.tool()
+    async def short_build(project_dir: str, parts: list[str] | None = None, only: list[str] | None = None,
+                          wait_seconds: float = 900) -> dict:
+        """Build a vertical Short (1080x1920, 30 fps) from <project_dir>\\short.json: one MP4 per shot (V1),
+        the graphics + word-by-word captions overlay (V2, ProRes 4444 with alpha), the narration leveled to
+        about -14 LUFS (A1) and the music/SFX bed (A2). parts: any of shots, overlay, audio (default all);
+        only: rebuild just these shots. The result's 'timeline' says where each file goes in Resolve
+        (record_frame from the timeline start). Format of short.json: media-toolbox docs/short-spec.md."""
+        return await run("short_build", {"project_dir": project_dir, "parts": parts, "only": only}, wait_seconds)
+
+    @mcp.tool()
+    async def short_preview(project_dir: str, wait_seconds: float = 600) -> dict:
+        """Composite a built Short (shots + overlay + audio) into <project>\\edit\\preview.mp4 and a contact
+        sheet with one frame per shot (preview_sheet.jpg), to check it before assembling in Resolve."""
+        return await run("short_preview", {"project_dir": project_dir}, wait_seconds)
+
+    @mcp.tool()
+    async def short_frames(src: str, times: list[float], region: list[int] | None = None, cols: int = 4,
+                           out: str | None = None) -> dict:
+        """Grab frames from a screen recording at the given seconds into one labelled grid image (optionally
+        cropped to region [x, y, w, h]), to plan a Short's crops and moments. Read the image afterwards."""
+        return await run("short_frames", {"src": src, "times": [str(t) for t in times],
+                                          "region": [str(v) for v in region] if region else None,
+                                          "cols": cols, "out": out}, 300)
 
     @mcp.tool()
     async def job_status(job_id: str, log_lines: int = 40) -> dict:

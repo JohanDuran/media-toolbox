@@ -23,7 +23,7 @@ ENV PATH=/opt/venv/bin:$PATH
 USER node
 RUN hyperframes browser ensure
 WORKDIR /app
-COPY --chown=node:node common/toolbox_worker.py render/server.py /app/
+COPY --chown=node:node common/toolbox_worker.py common/shorts_spec.py render/server.py render/shorts_build.py /app/
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)"

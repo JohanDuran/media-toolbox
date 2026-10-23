@@ -11,6 +11,7 @@ as an MCP server, from any project.
 | `speak` | tts | GPU | Kokoro-82M text to speech (English, Spanish, French, Italian, Portuguese, Hindi) |
 | `render_hyperframes` | render | CPU | Local HyperFrames render, pinned HyperFrames + Chrome |
 | `ffmpeg`, `ffprobe` | render | CPU | Any ffmpeg command, media info |
+| `short_info`, `short_build`, `short_preview`, `short_frames` | render | CPU | Vertical Shorts (1080×1920) built from a `short.json` spec: shots from screen recordings, graphics + word-by-word captions, voice and music/SFX, all timed to the narration's words. See [docs/short-spec.md](docs/short-spec.md) |
 
 Dashboard: **http://localhost:8765**. MCP: **http://localhost:8765/mcp**.
 
@@ -44,13 +45,16 @@ Dashboard: **http://localhost:8765**. MCP: **http://localhost:8765/mcp**.
 media-toolbox/
 ├── .env.example          settings template; copy to .env (git-ignored) and set your paths
 ├── docker-compose.yml    all services
+├── docs/short-spec.md    the short.json format for vertical Shorts
 ├── gateway/
-│   ├── app/              FastAPI: api, MCP tools (mcp_tools.py), queue (runner.py), tool specs (tools.py)
+│   ├── app/              FastAPI: api, MCP tools (mcp_tools.py), queue (runner.py), tool specs (tools.py), shorts.py
 │   └── web/              dashboard (React + TypeScript, built into the gateway image)
 └── workers/
     ├── Dockerfile.gpu    one shared torch base + a target per GPU tool
     ├── Dockerfile.render HyperFrames + Chrome + ffmpeg
-    ├── common/           the worker contract (toolbox_worker.py) + the pinned torch build
+    ├── common/           the worker contract (toolbox_worker.py), the Shorts spec parser (shorts_spec.py),
+    │                     the pinned torch build
+    ├── render/           server.py + shorts_build.py (the Shorts engine)
     └── <tool>/           server.py + requirements.txt (pinned)
 ```
 

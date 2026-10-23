@@ -85,6 +85,41 @@ export type Sound = {
   notes?: string;
 };
 
+export type Built = { path: string; exists: boolean; mtime: number | null };
+
+export type ShortProject = {
+  project_dir: string;
+  name: string;
+  title: string;
+  length_s?: number;
+  shots?: number;
+  error: string | null;
+  preview: Built;
+};
+
+export type ShortShot = {
+  name: string;
+  start: number;
+  end: number;
+  record_frame: number;
+  frames: number;
+  layers: number;
+  note: string;
+  file: Built;
+  thumb: Built;
+};
+
+export type ShortInfo = {
+  title: string;
+  project_dir: string;
+  length_s: number;
+  frames: number;
+  anchors: Record<string, number>;
+  shots: ShortShot[];
+  graphics_list: { start: number; end: number; text: string }[];
+  outputs: Record<"overlay" | "narration" | "bed" | "preview" | "sheet", Built>;
+};
+
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, init);
   if (!r.ok) {
@@ -119,6 +154,8 @@ export const api = {
   mark: (file: string, fields: { status?: string; used_in?: string; tags?: string[]; note?: string }) =>
     call<Sound[]>("/api/library/mark", post({ file, ...fields })),
   scan: () => call<{ cataloged: string[] }>("/api/library/scan", { method: "POST" }),
+  shorts: () => call<ShortProject[]>("/api/shorts"),
+  shortInfo: (project: string) => call<ShortInfo>(`/api/shorts/info?project=${encodeURIComponent(project)}`),
 };
 
 export const fileUrl = (path: string) => `/api/file?path=${encodeURIComponent(path)}`;

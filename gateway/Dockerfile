@@ -15,6 +15,7 @@ COPY gateway/requirements.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/uv uv pip install --system -r /tmp/requirements.txt
 WORKDIR /app
 COPY gateway/app /app/app
+COPY workers/common/shorts_spec.py /app/shorts_spec.py
 COPY --from=web /web/dist /app/web
 EXPOSE 8765
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s \

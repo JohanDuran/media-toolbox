@@ -46,6 +46,7 @@ services:
       OUTPUTS_DIR: ${OUTPUTS_DIR}
       SFX_LIBRARY: ${SFX_LIBRARY}
       PROTECTED_DIRS: ${PROTECTED_DIRS}
+      SHORTS_ROOT: ${SHORTS_ROOT:-${HOST_HOME}/Documents/Projects}
       PUBLIC_URL: http://localhost:${PORT}
       DB_PATH: /cache/gateway/jobs.sqlite
       PYTHONUNBUFFERED: "1"
@@ -96,8 +97,13 @@ services:
       context: workers
       dockerfile: Dockerfile.render
     image: media-toolbox/render
-    volumes: *host-mounts
+    volumes:
+      - ${HOST_HOME:?copy .env.example to .env and set HOST_HOME}:/host
+      - toolbox-cache:/cache
+      # Your Windows fonts, read-only, for Shorts graphics (Segoe UI etc. can't be shipped in the image).
+      - ${WINDOWS_FONTS:-C:/Windows/Fonts}:/fonts:ro
     environment:
+      FONTS_DIR: /fonts
       PYTHONUNBUFFERED: "1"
       DO_NOT_TRACK: "1"
       HYPERFRAMES_TELEMETRY_DISABLED: "1"

@@ -12,7 +12,7 @@ from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import library
+from . import library, shorts
 from .config import HOST_HOME, OUTPUTS_DIR, PROTECTED_DIRS, PUBLIC_URL, SFX_LIBRARY, WEB_DIR, WORKERS
 from .db import JobDB
 from .mcp_tools import build_mcp
@@ -120,6 +120,19 @@ def library_mark(file: str = Body(...), status: str | None = Body(None), used_in
 @app.post("/api/library/scan")
 def library_scan():
     return library.scan()
+
+
+@app.get("/api/shorts")
+def shorts_list():
+    return shorts.find_projects()
+
+
+@app.get("/api/shorts/info")
+def shorts_info(project: str = Query(...)):
+    try:
+        return shorts.info(project)
+    except (ValueError, PathError) as e:
+        raise bad_request(e)
 
 
 @app.get("/api/file")
