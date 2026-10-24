@@ -44,8 +44,12 @@ Step "NVIDIA GPU"
 $gpu = $false
 if (-not $NoGpu) {
     if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
-        $name = (& nvidia-smi --query-gpu=name --format=csv,noheader 2>$null | Select-Object -First 1)
-        if ($LASTEXITCODE -eq 0 -and $name) { $gpu = $true; Ok "Found $name" }
+        # Read all output before taking the first line: stopping the pipeline early
+        # (Select-Object -First 1) can kill nvidia-smi and report exit code -1.
+        $out = @(& nvidia-smi --query-gpu=name --format=csv,noheader 2>$null)
+        $code = $LASTEXITCODE
+        $name = if ($out.Count -gt 0) { "$($out[0])".Trim() } else { "" }
+        if ($code -eq 0 -and $name) { $gpu = $true; Ok "Found $name" }
     }
     if (-not $gpu) { Warn "No NVIDIA GPU found. Transcription, sound effects and text to speech will be off; ffmpeg, renders and Shorts still work." }
 } else {
@@ -132,10 +136,11 @@ if (-not $up) { Fail "The gateway didn't answer at $url. Check: docker compose l
 Ok "Dashboard: $url"
 
 Write-Host ""
-Write-Host "Done. Next, in Claude Code:" -ForegroundColor Cyan
-Write-Host "  /plugin marketplace add JohanDuran/video-studio"
-Write-Host "  /plugin install video-studio"
-Write-Host "  /studio-setup"
+Write-Host "Done. Next, install the Claude Code plugin from this terminal:" -ForegroundColor Cyan
+Write-Host "  claude plugin marketplace add JohanDuran/video-studio"
+Write-Host "  claude plugin install video-studio@video-studio"
+Write-Host "Then start a new Claude Code session and run /studio-setup."
+Write-Host "(In the Claude desktop app, /plugin opens the plugin manager instead of running these, so use the terminal.)"
 Write-Host ""
 Write-Host "Or register only the MCP server:"
 Write-Host "  claude mcp add --scope user --transport http media-toolbox $url/mcp"

@@ -91,13 +91,22 @@ Then open **http://localhost:8765**.
 ## Use with Claude
 
 The easiest way is the **video-studio** Claude Code plugin. It brings the MCP connection, the
-skills (Shorts, editing recordings, explainers) and a `/studio-setup` command:
+skills (Shorts, editing recordings, explainers) and a `/studio-setup` command. Install it from a terminal
+(PowerShell, or the terminal panel in the Claude desktop app):
 
+```bash
+claude plugin marketplace add JohanDuran/video-studio
 ```
-/plugin marketplace add JohanDuran/video-studio
-/plugin install video-studio
-/studio-setup
+
+```bash
+claude plugin install video-studio@video-studio
 ```
+
+Then start a **new** Claude Code session (plugins load when a session starts) and run `/studio-setup`.
+
+> **Claude desktop app:** typing `/plugin marketplace add …` in a chat opens the plugin manager window instead of
+> running the command, so use the terminal commands above. In the Claude Code CLI, the same steps also work as
+> `/plugin marketplace add JohanDuran/video-studio` and `/plugin install video-studio@video-studio`.
 
 Or register only the MCP server, once, for every project:
 
