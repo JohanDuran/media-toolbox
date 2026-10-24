@@ -5,16 +5,16 @@
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\install.ps1
-  powershell -ExecutionPolicy Bypass -File .\install.ps1 -StudioDir D:\Studio -RecordingsDir D:\OBS
+  powershell -ExecutionPolicy Bypass -File .\install.ps1 -StudioDir D:\media-studio -RecordingsDir D:\Recordings
   powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoGpu     # no NVIDIA card: CPU tools only
 
   Safe to run again: an existing .env is kept (use -Force to rewrite it).
 #>
 param(
     # Where your video projects, sound library and generated files live.
-    [string]$StudioDir = (Join-Path $HOME "Documents\Studio"),
-    # Your raw recordings. The toolbox may read them but never writes there.
-    [string]$RecordingsDir = (Join-Path $HOME "Videos"),
+    [string]$StudioDir = (Join-Path $HOME "media-studio"),
+    # Your raw recordings (any recorder: point it here). The toolbox reads them but never writes there.
+    [string]$RecordingsDir = (Join-Path $StudioDir "recordings"),
     [int]$Port = 8765,
     [switch]$NoGpu,
     [switch]$Build,
@@ -54,7 +54,7 @@ if (-not $NoGpu) {
 
 # 3. Folders and .env ---------------------------------------------------------------------
 Step "Studio folder and settings"
-foreach ($dir in @($StudioDir, (Join-Path $StudioDir "sfx_library"), (Join-Path $StudioDir "_scratch"))) {
+foreach ($dir in @($StudioDir, (Join-Path $StudioDir "sfx_library"), (Join-Path $StudioDir "_scratch"), $RecordingsDir)) {
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
 }
 Ok "Studio: $StudioDir"

@@ -78,8 +78,8 @@ powershell -ExecutionPolicy Bypass -File media-toolbox\install.ps1
 ```
 
 `install.ps1` checks Docker and your GPU, creates your studio folder (default
-`Documents\Studio`, change it with `-StudioDir`), writes `.env`, pulls the prebuilt images from
-`ghcr.io` and starts everything. Options: `-RecordingsDir` (your raw recordings, kept read-only),
+`%USERPROFILE%\media-studio`, change it with `-StudioDir`), writes `.env`, pulls the prebuilt images from
+`ghcr.io` and starts everything. Options: `-RecordingsDir` (your raw recordings, kept read-only; default `media-studio\recordings`),
 `-NoGpu`, `-Build` (build the images yourself), `-Force` (rewrite `.env`). It's safe to run again.
 
 Sound effects use Stable Audio Open, which is gated on Hugging Face: accept its license on the
