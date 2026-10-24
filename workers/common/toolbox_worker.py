@@ -137,6 +137,14 @@ def create_app(
         ctx.cancel_requested = True
         return {"cancel_requested": True}
 
+    @app.get("/gpu")
+    def gpu():
+        """Whole-GPU figures from nvidia-smi, for the dashboard (the gateway itself has no GPU)."""
+        try:
+            return nvidia_smi()
+        except FileNotFoundError:
+            raise HTTPException(404, "nvidia-smi not available in this worker")
+
     @app.post("/unload")
     def do_unload():
         if state["current"] is not None:
@@ -146,6 +154,17 @@ def create_app(
         return {"model_loaded": bool(loaded and loaded())}
 
     return app
+
+
+def nvidia_smi() -> dict:
+    import subprocess
+
+    out = subprocess.run(
+        ["nvidia-smi", "--query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu",
+         "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=5)
+    name, used, total, util, temp = [x.strip() for x in out.stdout.strip().splitlines()[0].split(",")]
+    return {"name": name, "memory_used_mb": int(used), "memory_total_mb": int(total),
+            "utilization": int(util), "temperature_c": int(temp)}
 
 
 def cuda_info() -> dict:

@@ -12,12 +12,13 @@ from typing import Literal
 from mcp.server.fastmcp import FastMCP
 
 from . import library, shorts
-from .config import PUBLIC_URL, SFX_LIBRARY
+from .config import PROTECTED_DIRS, PUBLIC_URL, SFX_LIBRARY
 from .paths import PathError, windows
 from .runner import Runner
 
-INSTRUCTIONS = f"""Local media toolbox (free, runs on this PC's GPU in Docker). Pass normal Windows paths;
-anything under the user's home folder works. Outputs never go into the OBS folder.
+INSTRUCTIONS = f"""Local media toolbox (free, runs on this PC in Docker; GPU tools need an NVIDIA GPU). Pass normal
+Windows paths; anything under the user's home folder works. Protected folders (read-only, outputs
+never go there): {', '.join(windows(p) for p in PROTECTED_DIRS) or 'none'}.
 Tools: transcribe (WhisperX), timeline_transcript, sfx_search / sfx_generate / sfx_mark / sfx_scan
 (Stable Audio + shared sound library at {windows(SFX_LIBRARY)}), speak (Kokoro TTS),
 render_hyperframes, ffmpeg, ffprobe, vertical Shorts from a short.json spec (short_info / short_build /
@@ -68,7 +69,7 @@ def build_mcp(runner: Runner) -> FastMCP:
                          model: str = "large-v3", stream: int = 0, vocab: str | None = None,
                          wait_seconds: float = 900) -> dict:
         """Transcribe video/audio files with WhisperX (word timings). Writes <name>.json, .srt and
-        .words.tsv per file into out_dir (default: toolbox outputs\\transcripts). stream 0 = OBS mic track.
+        .words.tsv per file into out_dir (default: toolbox outputs\\transcripts). stream 0 = first audio track (usually the mic).
         Times are seconds in the source file. vocab biases recognition toward names/terms."""
         return await run("transcribe", {"files": files, "out_dir": out_dir, "language": language, "model": model,
                                         "stream": stream, "vocab": vocab}, wait_seconds)
@@ -142,7 +143,7 @@ def build_mcp(runner: Runner) -> FastMCP:
     @mcp.tool()
     async def ffmpeg(args: list[str], wait_seconds: float = 900) -> dict:
         """Run ffmpeg (one list item per argument; Windows paths are converted, but not paths inside filter
-        strings). Inputs may be in the OBS folder, outputs may not. Add -y to overwrite. The log tail is
+        strings). Inputs may be in a protected folder, outputs may not. Add -y to overwrite. The log tail is
         returned, so analysis filters like volumedetect work."""
         res = await run("ffmpeg", {"args": args}, wait_seconds)
         if res.get("status") == "done":
