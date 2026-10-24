@@ -5,7 +5,7 @@ Action `transcribe` params:
   out_dir     where <stem>.json / .srt / .words.tsv are written
   language    e.g. "en", "es"; auto-detect if empty
   model       Whisper model (default large-v3)
-  stream      audio stream index (0 = OBS mic track)
+  stream      audio stream index (0 = first audio track, usually the mic)
   vocab       names/terms to bias recognition toward (initial prompt)
   batch_size  default 8
 
@@ -14,6 +14,7 @@ The model stays loaded between jobs until the gateway asks for /unload.
 """
 
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -23,7 +24,7 @@ import whisperx
 
 from toolbox_worker import JobContext, create_app, cuda_info, free_cuda
 
-DEFAULT_VOCAB = "Claude, Claude Desktop, Claude Code, Anthropic, MCP, skills, DaVinci Resolve, HyperFrames, OBS."
+DEFAULT_VOCAB = os.environ.get("TRANSCRIBE_VOCAB") or "Claude, Claude Desktop, Claude Code, Anthropic, MCP, skills, DaVinci Resolve, HyperFrames, OBS."
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 COMPUTE_TYPE = "float16" if DEVICE == "cuda" else "int8"
 

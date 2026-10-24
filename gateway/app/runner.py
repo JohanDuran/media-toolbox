@@ -4,14 +4,15 @@ Rules:
   - each worker runs one job at a time;
   - GPU workers share one GPU lock (8 GB of VRAM fits one model comfortably), and
     before a GPU job starts, the other GPU workers are asked to unload their models;
-  - jobs wait in the queue while their worker is down, and start once it is back.
+  - jobs wait in the queue while their worker is down, and start once it is back;
+    a worker that stays unreachable for WORKER_GRACE_SECONDS fails its queued jobs with a
+    clear message (e.g. the GPU workers aren't started on a machine without an NVIDIA card).
 """
 
 from __future__ import annotations
 
 import asyncio
 import re
-import subprocess
 import time
 import traceback
 
@@ -21,6 +22,16 @@ from .config import CONTAINER_HOME, HOST_HOME, WORKERS
 from .db import FINISHED, JobDB
 from .paths import results_to_windows, windows
 from .tools import TOOLS, prepare
+
+
+WORKER_GRACE_SECONDS = 120
+
+
+def _offline_message(worker: str) -> str:
+    if WORKERS.get(worker, {}).get("gpu"):
+        return (f"the {worker} worker isn't running. GPU tools need an NVIDIA GPU and the 'gpu' compose "
+                f"profile (COMPOSE_PROFILES=gpu in .env), then: docker compose up -d {worker}")
+    return f"the {worker} worker isn't running. Start it with: docker compose up -d {worker}"
 
 
 _CONTAINER_PATH = re.compile(re.escape(CONTAINER_HOME) + r"(/[^\s'\"]*)")
@@ -105,7 +116,10 @@ class Runner:
             if worker in self.running:
                 continue
             if worker != "gateway" and not self.health[worker].get("up"):
-                continue  # waits until the worker is back
+                down_since = self.health[worker].get("down_since")
+                if down_since and time.time() - down_since > WORKER_GRACE_SECONDS:
+                    self._finish(job["id"], "failed", error=_offline_message(worker))
+                continue  # otherwise waits until the worker is back (restarts, first start)
             if job["gpu"] and gpu_busy:
                 continue
             self.running[worker] = job["id"]
@@ -127,29 +141,32 @@ class Runner:
         try:
             r = await self.http.get(f"{url}/health", timeout=3)
             r.raise_for_status()
-            h.update(r.json(), up=True, error=None, checked=time.time())
+            h.update(r.json(), up=True, error=None, checked=time.time(), down_since=None)
             if "info" not in h or h.get("info_age", 0) + 30 < time.time():
                 i = await self.http.get(f"{url}/info", timeout=10)
                 h.update(info=i.json(), info_age=time.time())
         except (httpx.ConnectError, httpx.ConnectTimeout):
-            h.update(up=False, error="container not running (or still starting)", checked=time.time())
+            h.update(up=False, error="container not running (or still starting)", checked=time.time(),
+                     down_since=h.get("down_since") or time.time())
             h.pop("info", None)
         except Exception as e:
+            # Slow or erroring but reachable (e.g. busy): not counted as "not running".
             h.update(up=False, error=f"{type(e).__name__}: {e}", checked=time.time())
             h.pop("info", None)
 
     async def _gpu_stats(self) -> None:
-        def query():
-            out = subprocess.run(
-                ["nvidia-smi", "--query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu",
-                 "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=5)
-            name, used, total, util, temp = [x.strip() for x in out.stdout.strip().split(",")]
-            return {"name": name, "memory_used_mb": int(used), "memory_total_mb": int(total),
-                    "utilization": int(util), "temperature_c": int(temp)}
-        try:
-            self.gpu = await asyncio.to_thread(query)
-        except Exception as e:
-            self.gpu = {"error": str(e)}
+        """GPU figures come from a running GPU worker; the gateway itself has no GPU."""
+        for name, cfg in WORKERS.items():
+            if not cfg["gpu"] or not self.health[name].get("up"):
+                continue
+            try:
+                r = await self.http.get(f"{cfg['url']}/gpu", timeout=6)
+                r.raise_for_status()
+                self.gpu = r.json()
+                return
+            except Exception:
+                continue
+        self.gpu = {"error": "no GPU worker running (GPU tools off, or still starting)"}
 
     # --- running one job -------------------------------------------------------------
 

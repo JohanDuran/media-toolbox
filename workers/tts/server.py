@@ -24,14 +24,14 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # Languages whose extra dependencies are installed in this image.
 LANGUAGES = {"a": "English (US)", "b": "English (UK)", "e": "Spanish", "f": "French",
              "i": "Italian", "p": "Portuguese (BR)", "h": "Hindi"}
-VOICES = {
-    "a": ["af_heart", "af_bella", "af_nicole", "af_sarah", "af_sky", "am_adam", "am_michael", "am_puck"],
-    "b": ["bf_emma", "bf_isabella", "bm_george", "bm_fable", "bm_lewis"],
+VOICES = {  # every Kokoro-82M v1.0 voice for the installed languages
+    "a": ["af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica", "af_kore", "af_nicole", "af_nova", "af_river", "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx", "am_puck", "am_santa"],
+    "b": ["bf_alice", "bf_emma", "bf_isabella", "bf_lily", "bm_daniel", "bm_fable", "bm_george", "bm_lewis"],
     "e": ["ef_dora", "em_alex", "em_santa"],
     "f": ["ff_siwis"],
     "i": ["if_sara", "im_nicola"],
-    "p": ["pf_dora", "pm_alex"],
-    "h": ["hf_alpha", "hm_omega"],
+    "p": ["pf_dora", "pm_alex", "pm_santa"],
+    "h": ["hf_alpha", "hf_beta", "hm_omega", "hm_psi"],
 }
 
 _pipes: dict[str, KPipeline] = {}

@@ -1,7 +1,7 @@
 """Convert between Windows paths (what you and Claude pass) and container paths (/host/...).
 
 Your user folder (HOST_HOME) is mounted at /host in every container, so
-  C:\\Users\\you\\Videos\\OBS\\clip.mp4  <->  /host/Videos/OBS/clip.mp4
+  C:\\Users\\you\\Videos\\clip.mp4  <->  /host/Videos/clip.mp4
 Paths outside HOST_HOME can't be reached and are refused with a clear message.
 """
 

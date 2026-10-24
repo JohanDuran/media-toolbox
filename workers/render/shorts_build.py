@@ -7,7 +7,8 @@
 
 Each shot is one or more layers (crops of screen recordings or stills) over a dark backdrop,
 with eased zoom/pan keys and privacy blurs. Fonts come from the Windows font folder mounted at
-FONTS_DIR (read-only), so graphics match what the same text looks like on the PC.
+FONTS_DIR (read-only), so graphics match what the same text looks like on the PC. Without
+Segoe UI there (another OS, or no fonts mounted), the open Noto Sans in the image is used.
 """
 
 from __future__ import annotations
@@ -20,7 +21,13 @@ from shorts_spec import Spec, ass_color, frame
 
 W, H, FPS = 1080, 1920, 30
 FONTS = os.environ.get("FONTS_DIR", "/fonts")
-BOLD_FONT = f"{FONTS}/segoeuib.ttf"
+_HAS_SEGOE = Path(FONTS, "segoeuib.ttf").is_file()
+if _HAS_SEGOE:
+    BOLD_FONT = f"{FONTS}/segoeuib.ttf"
+    HEAVY, HEAVY_BOLD, REGULAR = "Segoe UI Black", "0", "Segoe UI"
+else:  # open fallback shipped in the image (fonts-noto-core)
+    BOLD_FONT = "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf"
+    HEAVY, HEAVY_BOLD, REGULAR = "Noto Sans", "-1", "Noto Sans"
 POP = r"\fscx70\fscy70\t(0,140,\fscx108\fscy108)\t(140,220,\fscx100\fscy100)"
 
 
@@ -102,16 +109,16 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,Segoe UI Black,82,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,7,3,5,40,40,0,1
-Style: Head,Segoe UI Black,66,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,0,0,0,0,100,100,1,0,1,6,3,5,40,40,0,1
-Style: Big,Segoe UI Black,168,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,9,4,5,40,40,0,1
-Style: Tag,Segoe UI Black,54,&H00FFFFFF,&H00FFFFFF,&H004D4DFF,&H00000000,0,0,0,0,100,100,2,0,3,16,0,5,40,40,0,1
-Style: Card,Segoe UI,50,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
-Style: Shape,Segoe UI,20,&H00241F1E,&H00241F1E,&H005777D9,&H00000000,0,0,0,0,100,100,0,0,1,3,0,7,0,0,0,1
+Style: Cap,@HEAVY@,82,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,@B@,0,0,0,100,100,0,0,1,7,3,5,40,40,0,1
+Style: Head,@HEAVY@,66,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,@B@,0,0,0,100,100,1,0,1,6,3,5,40,40,0,1
+Style: Big,@HEAVY@,168,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,@B@,0,0,0,100,100,0,0,1,9,4,5,40,40,0,1
+Style: Tag,@HEAVY@,54,&H00FFFFFF,&H00FFFFFF,&H004D4DFF,&H00000000,@B@,0,0,0,100,100,2,0,3,16,0,5,40,40,0,1
+Style: Card,@REGULAR@,50,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Shape,@REGULAR@,20,&H00241F1E,&H00241F1E,&H005777D9,&H00000000,0,0,0,0,100,100,0,0,1,3,0,7,0,0,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
+""".replace("@HEAVY@", HEAVY).replace("@B@", HEAVY_BOLD).replace("@REGULAR@", REGULAR)
 
 
 def _ts(t: float) -> str:

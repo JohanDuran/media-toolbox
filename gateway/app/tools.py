@@ -7,6 +7,7 @@ tools and REST API both submit through them, so all doors behave the same.
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import time
@@ -18,7 +19,8 @@ from .config import OUTPUTS_DIR, SFX_LIBRARY
 from .paths import PathError, check_writable, looks_like_path, protected_dir, to_container
 from .timeline import timeline_transcript
 
-DEFAULT_VOCAB = "Claude, Claude Desktop, Claude Code, Anthropic, MCP, skills, DaVinci Resolve, HyperFrames, OBS."
+# Names and terms transcription is biased toward; set TRANSCRIBE_VOCAB in .env for your own topics.
+DEFAULT_VOCAB = os.environ.get("TRANSCRIBE_VOCAB") or "Claude, Claude Desktop, Claude Code, Anthropic, MCP, skills, DaVinci Resolve, HyperFrames, OBS."
 
 
 @dataclass
@@ -168,7 +170,7 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
             Param("language", "text", "Language", help="en, es, ... (blank = detect)"),
             Param("model", "select", "Model", default="large-v3",
                   options=["large-v3", "large-v3-turbo", "medium", "small", "tiny"]),
-            Param("stream", "integer", "Audio stream", default=0, help="0 = OBS mic track"),
+            Param("stream", "integer", "Audio stream", default=0, help="0 = first audio track (usually the mic)"),
             Param("vocab", "longtext", "Vocabulary hint", default=DEFAULT_VOCAB,
                   help="Names and terms to bias recognition toward"),
             Param("batch_size", "integer", "Batch size", default=8),
@@ -208,10 +210,12 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
         [
             Param("text", "longtext", "Text", True, help="Blank lines split paragraphs"),
             Param("voice", "select", "Voice", default="af_heart", options=[
-                "af_heart", "af_bella", "af_nicole", "af_sarah", "af_sky", "am_adam", "am_michael", "am_puck",
-                "bf_emma", "bf_isabella", "bm_george", "bm_fable", "bm_lewis",
-                "ef_dora", "em_alex", "em_santa", "ff_siwis", "if_sara", "im_nicola",
-                "pf_dora", "pm_alex", "hf_alpha", "hm_omega"]),
+                "af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica", "af_kore", "af_nicole",
+                "af_nova", "af_river", "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir",
+                "am_liam", "am_michael", "am_onyx", "am_puck", "am_santa", "bf_alice", "bf_emma",
+                "bf_isabella", "bf_lily", "bm_daniel", "bm_fable", "bm_george", "bm_lewis", "ef_dora",
+                "em_alex", "em_santa", "ff_siwis", "if_sara", "im_nicola", "pf_dora", "pm_alex", "pm_santa",
+                "hf_alpha", "hf_beta", "hm_omega", "hm_psi"]),
             Param("speed", "number", "Speed", default=1.0),
             Param("pause", "number", "Pause between paragraphs (s)", default=0.35),
             Param("out_path", "path_out", "Output .wav", help=f"Blank = {OUTPUTS_DIR}\\speech"),
@@ -235,7 +239,7 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
     ),
     Tool(
         "ffmpeg", "ffmpeg", "render", "ffmpeg", False,
-        "Run ffmpeg with the given arguments (Windows paths are converted). Inputs may come from the OBS "
+        "Run ffmpeg with the given arguments (Windows paths are converted). Inputs may come from a protected "
         "folder, outputs may not. Paths inside filter strings are not converted.",
         [Param("args", "strings", "Arguments", True, help='e.g. -i C:\\...\\in.mp4 -af volumedetect -f null -')],
         prepare=_prep_ffmpeg,

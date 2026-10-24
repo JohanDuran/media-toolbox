@@ -7,7 +7,7 @@ as an MCP server, from any project.
 |---|---|---|---|
 | `transcribe` | whisperx | GPU | WhisperX transcripts with word timings (.json, .srt, .words.tsv) |
 | `timeline_transcript` | gateway | CPU | Maps per-file transcripts onto a Resolve timeline |
-| `generate_sfx` + sound library | stable-audio | GPU | Stable Audio Open 1.0 SFX / music beds, cataloged in the shared library |
+| `sfx_generate` + sound library | stable-audio | GPU | Stable Audio Open 1.0 SFX / music beds, cataloged in the shared library |
 | `speak` | tts | GPU | Kokoro-82M text to speech (English, Spanish, French, Italian, Portuguese, Hindi) |
 | `render_hyperframes` | render | CPU | Local HyperFrames render, pinned HyperFrames + Chrome |
 | `ffmpeg`, `ffprobe` | render | CPU | Any ffmpeg command, media info |
@@ -43,7 +43,8 @@ Dashboard: **http://localhost:8765**. MCP: **http://localhost:8765/mcp**.
 
 ```
 media-toolbox/
-├── .env.example          settings template; copy to .env (git-ignored) and set your paths
+├── .env.example          settings template; install.ps1 turns it into .env (git-ignored)
+├── install.ps1           one-step setup on Windows
 ├── docker-compose.yml    all services
 ├── docs/short-spec.md    the short.json format for vertical Shorts
 ├── gateway/
@@ -58,19 +59,53 @@ media-toolbox/
     └── <tool>/           server.py + requirements.txt (pinned)
 ```
 
-## Setup
+## Requirements
 
-Needs Windows with Docker Desktop (WSL 2 backend) and an NVIDIA GPU with a current driver
-(CUDA 12.8; RTX 50 series supported). Everything else is inside the images.
+- Windows 10/11 with [Docker Desktop](https://www.docker.com/products/docker-desktop/) (WSL 2 backend).
+- For the GPU tools (transcription, sound effects, text to speech): an NVIDIA GPU with a current
+  driver (CUDA 12.8; RTX 50 series supported). 8 GB of VRAM is enough. Without one, ffmpeg,
+  HyperFrames renders and Shorts still work.
+- About 40 GB of disk for the images and models.
 
-1. Copy `.env.example` to `.env` and set your own paths (`.env` stays out of git).
-2. Build and start (the first build downloads ~10 GB, mostly torch + CUDA):
-   ```bash
-   docker compose up -d --build
-   ```
-3. Open http://localhost:8765 and register the MCP server with Claude Code (below).
-4. Stable Audio Open is gated on Hugging Face: accept its license on the model page and run
-   `hf auth login` once on the host; the token saved under `HOST_HOME\.cache\huggingface` is used.
+## Quick install
+
+```bash
+git clone https://github.com/JohanDuran/media-toolbox
+```
+
+```bash
+powershell -ExecutionPolicy Bypass -File media-toolbox\install.ps1
+```
+
+`install.ps1` checks Docker and your GPU, creates your studio folder (default
+`%USERPROFILE%\media-studio`, change it with `-StudioDir`), writes `.env`, pulls the prebuilt images from
+`ghcr.io` and starts everything. Options: `-RecordingsDir` (your raw recordings, kept read-only; default `media-studio\recordings`),
+`-NoGpu`, `-Build` (build the images yourself), `-Force` (rewrite `.env`). It's safe to run again.
+
+Sound effects use Stable Audio Open, which is gated on Hugging Face: accept its license on the
+[model page](https://huggingface.co/stabilityai/stable-audio-open-1.0) and run `hf auth login` once
+on the PC. The token saved under `%USERPROFILE%\.cache\huggingface` is used. The other tools need no account.
+
+Then open **http://localhost:8765**.
+
+## Use with Claude
+
+The easiest way is the **video-studio** Claude Code plugin. It brings the MCP connection, the
+skills (Shorts, editing recordings, explainers) and a `/studio-setup` command:
+
+```
+/plugin marketplace add JohanDuran/video-studio
+/plugin install video-studio
+/studio-setup
+```
+
+Or register only the MCP server, once, for every project:
+
+```bash
+claude mcp add --scope user --transport http media-toolbox http://localhost:8765/mcp
+```
+
+Job tools wait for the result; a long job returns its id, and `wait_for_job` picks it up.
 
 ## Everyday commands
 
@@ -88,10 +123,14 @@ docker compose ps
 docker compose logs -f gateway
 ```
 
-Rebuild and restart one tool after changing it:
+Update to the latest images:
 
 ```bash
-docker compose up -d --build whisperx
+docker compose pull
+```
+
+```bash
+docker compose up -d
 ```
 
 Stop everything (the containers start again with Docker Desktop otherwise):
@@ -100,15 +139,31 @@ Stop everything (the containers start again with Docker Desktop otherwise):
 docker compose down
 ```
 
-## Using it from Claude
+## Advanced
 
-Registered once, for every project:
+**Settings** are in `.env` (template: `.env.example`): your user folder, port, studio paths,
+protected folders, `COMPOSE_PROFILES` (`gpu` or empty), `TOOLBOX_VERSION` (image tag) and
+`TRANSCRIBE_VOCAB` (names and terms transcription should recognize).
+
+**Without an NVIDIA GPU:** set `COMPOSE_PROFILES=` (empty). The GPU workers don't start; jobs for
+them fail after two minutes with a message saying why.
+
+**Build the images yourself** (after changing code; the first build downloads ~10 GB):
 
 ```bash
-claude mcp add --scope user --transport http media-toolbox http://localhost:8765/mcp
+docker compose up -d --build
 ```
 
-Job tools wait for the result; a long job returns its id, and `wait_for_job` picks it up.
+Rebuild one tool without touching the others (rebuilding the gateway without `--no-deps`
+re-exports the large GPU images):
+
+```bash
+docker compose up -d --build --no-deps whisperx
+```
+
+**Publishing images:** pushing a tag like `v0.2.0` runs `.github/workflows/images.yml`, which
+builds all five images and pushes them to `ghcr.io/johanduran/media-toolbox-*` as that version
+and `latest`.
 
 ## Using it from scripts
 
@@ -125,9 +180,12 @@ Then `GET /api/jobs/<id>` (or `POST /api/jobs/<id>/wait`). `GET /api/tools` list
 3. The worker in `WORKERS` (`gateway/app/config.py`), a `Tool` spec in `gateway/app/tools.py`, and an
    MCP function in `gateway/app/mcp_tools.py`. The dashboard picks the form up automatically.
 
-## Licenses of the models
+## License
+
+The toolbox code is MIT (see [LICENSE](LICENSE)). The models it downloads have their own licenses:
+
+### Models
 
 - WhisperX / faster-whisper large-v3: MIT / Apache 2.0.
 - Stable Audio Open 1.0: Stability AI Community License (free under $1M yearly revenue).
-- Kokoro-82M: Apache 2.0. (ChatTTS, also in the Hugging Face cache, was not used: its weights are
-  non-commercial only.)
+- Kokoro-82M: Apache 2.0.
