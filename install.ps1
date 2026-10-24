@@ -44,8 +44,12 @@ Step "NVIDIA GPU"
 $gpu = $false
 if (-not $NoGpu) {
     if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
-        $name = (& nvidia-smi --query-gpu=name --format=csv,noheader 2>$null | Select-Object -First 1)
-        if ($LASTEXITCODE -eq 0 -and $name) { $gpu = $true; Ok "Found $name" }
+        # Read all output before taking the first line: stopping the pipeline early
+        # (Select-Object -First 1) can kill nvidia-smi and report exit code -1.
+        $out = @(& nvidia-smi --query-gpu=name --format=csv,noheader 2>$null)
+        $code = $LASTEXITCODE
+        $name = if ($out.Count -gt 0) { "$($out[0])".Trim() } else { "" }
+        if ($code -eq 0 -and $name) { $gpu = $true; Ok "Found $name" }
     }
     if (-not $gpu) { Warn "No NVIDIA GPU found. Transcription, sound effects and text to speech will be off; ffmpeg, renders and Shorts still work." }
 } else {
