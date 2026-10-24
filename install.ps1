@@ -136,10 +136,11 @@ if (-not $up) { Fail "The gateway didn't answer at $url. Check: docker compose l
 Ok "Dashboard: $url"
 
 Write-Host ""
-Write-Host "Done. Next, in Claude Code:" -ForegroundColor Cyan
-Write-Host "  /plugin marketplace add JohanDuran/video-studio"
-Write-Host "  /plugin install video-studio"
-Write-Host "  /studio-setup"
+Write-Host "Done. Next, install the Claude Code plugin from this terminal:" -ForegroundColor Cyan
+Write-Host "  claude plugin marketplace add JohanDuran/video-studio"
+Write-Host "  claude plugin install video-studio@video-studio"
+Write-Host "Then start a new Claude Code session and run /studio-setup."
+Write-Host "(In the Claude desktop app, /plugin opens the plugin manager instead of running these, so use the terminal.)"
 Write-Host ""
 Write-Host "Or register only the MCP server:"
 Write-Host "  claude mcp add --scope user --transport http media-toolbox $url/mcp"
