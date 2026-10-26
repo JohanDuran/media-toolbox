@@ -6,7 +6,7 @@
 #   docker compose up -d whisperx                   restart one tool
 #   docker compose logs -f gateway                  follow one service's log
 #
-# Settings come from .env next to this file. The GPU workers (whisperx, stable-audio, tts) are in
+# Settings come from .env next to this file. The GPU workers (whisperx, stable-audio, tts, vision) are in
 # the "gpu" profile, on by default via COMPOSE_PROFILES=gpu in .env. Without an NVIDIA GPU, leave
 # COMPOSE_PROFILES empty: ffmpeg, HyperFrames renders and Shorts still work.
 
@@ -96,6 +96,21 @@ services:
     profiles: [gpu]
     volumes: *host-mounts
     environment: *worker-env
+    <<: *gpu
+    restart: unless-stopped
+
+  vision:
+    build:
+      context: workers
+      dockerfile: Dockerfile.gpu
+      target: vision
+    image: ghcr.io/johanduran/media-toolbox-vision:${TOOLBOX_VERSION:-latest}
+    profiles: [gpu]
+    volumes: *host-mounts
+    environment:
+      <<: *worker-env
+      # Both models are public; an expired saved token makes downloads fail with 401.
+      HF_HUB_DISABLE_IMPLICIT_TOKEN: "1"
     <<: *gpu
     restart: unless-stopped
 

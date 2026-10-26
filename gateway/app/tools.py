@@ -158,6 +158,62 @@ def _prep_short_frames(p: dict) -> dict:
     return p
 
 
+def _stills_dir(src: str) -> str:
+    """Default home for depth maps, cutouts and parallax shots: a stills folder next to the source
+    (or inside it, for a folder of images); the toolbox outputs when the source is protected."""
+    from pathlib import Path
+
+    base = src.rstrip("/") if Path(src).is_dir() else src.rstrip("/").rsplit("/", 1)[0]
+    d = f"{base}/stills"
+    return _out("stills") if protected_dir(d) else d
+
+
+def _prep_vision(p: dict) -> dict:
+    if not p.get("out_dir"):
+        p["out_dir"] = check_writable(_stills_dir(p["images"][0]))
+    return p
+
+
+PARALLAX_MOVES = ["push-in", "pull-out", "pan-left", "pan-right", "pan-up", "pan-down", "drift"]
+_COMPANIONS = {"depth": "_depth.png", "cut": "_cut.png", "plate": "_plate.png"}
+
+
+def _prep_parallax(p: dict) -> dict:
+    from pathlib import Path
+
+    image = p["image"]
+    if not Path(image).is_file():
+        raise ValueError(f"no such image: {image}")
+    stem = Path(image).stem
+    stills = _stills_dir(image)
+    for key, suffix in _COMPANIONS.items():  # find what image_depth / image_cutout wrote for this still
+        if not p.get(key):
+            for d in (stills, str(Path(image).parent)):
+                if Path(f"{d}/{stem}{suffix}").is_file():
+                    p[key] = f"{d}/{stem}{suffix}"
+                    break
+    mode = p.get("mode") or "depth"
+    if mode == "depth" and not p.get("depth"):
+        raise ValueError(f"no depth map for {stem}: run image_depth on it first (or pass depth)")
+    if mode == "layers" and not (p.get("cut") and p.get("plate")):
+        raise ValueError(f"no cutout + plate for {stem}: run image_cutout with plate=true first (or use mode depth)")
+    if p.get("move") and p["move"] not in PARALLAX_MOVES:
+        raise ValueError(f"unknown move {p['move']!r}; use one of {PARALLAX_MOVES}")
+    size = str(p.get("size") or "1080x1920").lower()
+    if size != "source" and not re.fullmatch(r"\d{2,4}x\d{2,4}", size):
+        raise ValueError("size must be WxH (e.g. 1080x1920) or 'source'")
+    p["size"] = size
+    if p.get("center"):
+        p["center"] = [float(v) for v in p["center"]]
+        if len(p["center"]) != 2 or not all(0 <= v <= 1 for v in p["center"]):
+            raise ValueError("center must be two numbers from 0 to 1: x y")
+    if not p.get("output"):
+        ext = p.get("format") or "mp4"
+        p["output"] = f"{check_writable(stills)}/{stem}_{mode}_{p.get('move') or 'push-in'}.{ext}"
+    check_writable(p["output"])
+    return p
+
+
 TOOLS: dict[str, Tool] = {t.name: t for t in [
     Tool(
         "transcribe", "Transcribe", "whisperx", "transcribe", True,
@@ -280,6 +336,56 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
             Param("out", "path_out", "Output .png", help=f"Blank = {OUTPUTS_DIR}\\frames"),
         ],
         prepare=_prep_short_frames,
+    ),
+    Tool(
+        "image_depth", "Depth map", "vision", "depth", True,
+        "Depth maps for stills with Depth Anything V2 Small (Apache 2.0): <stem>_depth.png, 8-bit grayscale, "
+        "near = white, same size as the image. Used by parallax mode depth.",
+        [
+            Param("images", "paths_in", "Images", True, help="Image files, or a folder of images"),
+            Param("soften", "number", "Soften edges", default=0.006,
+                  help="Fraction of the long side; rounds off depth edges so parallax bends instead of tearing (0 = raw)"),
+            Param("out_dir", "dir_out", "Output folder", help="Blank = a stills folder next to the first image"),
+        ],
+        prepare=_prep_vision,
+    ),
+    Tool(
+        "image_cutout", "Cutout", "vision", "cutout", True,
+        "Cut the subject out of stills with BiRefNet (MIT): <stem>_cut.png (transparent) + <stem>_mask.png. "
+        "plate also writes <stem>_plate.png, the background with the subject removed and filled in "
+        "(needed by parallax mode layers).",
+        [
+            Param("images", "paths_in", "Images", True, help="Image files, or a folder of images"),
+            Param("plate", "boolean", "Also make the background plate", default=False),
+            Param("refine", "number", "Edge softening (px)", default=0, help="0 = model edges as they are"),
+            Param("out_dir", "dir_out", "Output folder", help="Blank = a stills folder next to the first image"),
+        ],
+        prepare=_prep_vision,
+    ),
+    Tool(
+        "parallax", "Parallax shot", "render", "parallax", False,
+        "Turn one still into a moving 2.5D camera shot. Mode depth (default) moves each pixel by its depth map "
+        "(run image_depth first); mode layers slides the cutout over the plate (run image_cutout with plate "
+        "first), best for one clean subject. Companion files are found next to the image or in its stills folder.",
+        [
+            Param("image", "path_in", "Image", True),
+            Param("mode", "select", "Mode", default="depth", options=["depth", "layers"]),
+            Param("move", "select", "Camera move", default="push-in", options=PARALLAX_MOVES),
+            Param("duration", "number", "Seconds", default=5),
+            Param("strength", "number", "Strength", default=1.0, help="1 = subtle, 2 = strong"),
+            Param("focus", "number", "Focus depth (depth mode)", default=0.35,
+                  help="0 = far stays fixed, 1 = near stays fixed"),
+            Param("size", "text", "Size", default="1080x1920", help="WxH or 'source'"),
+            Param("center", "strings", "Crop center", help="x y from 0 to 1 (blank = 0.5 0.5)"),
+            Param("fps", "select", "FPS", default="30", options=["24", "30", "60"]),
+            Param("format", "select", "Format", default="mp4", options=["mp4", "mov", "webm"]),
+            Param("quality", "select", "Quality", options=["", "draft", "looks", "delivery"]),
+            Param("depth", "path_in", "Depth map", help="Blank = <stem>_depth.png"),
+            Param("cut", "path_in", "Cutout", help="Blank = <stem>_cut.png"),
+            Param("plate", "path_in", "Plate", help="Blank = <stem>_plate.png"),
+            Param("output", "path_out", "Output file", help="Blank = <stills>\\<stem>_<mode>_<move>.<ext>"),
+        ],
+        prepare=_prep_parallax,
     ),
 ]}
 
