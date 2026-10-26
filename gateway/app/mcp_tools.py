@@ -22,7 +22,8 @@ never go there): {', '.join(windows(p) for p in PROTECTED_DIRS) or 'none'}.
 Tools: transcribe (WhisperX), timeline_transcript, sfx_search / sfx_generate / sfx_mark / sfx_scan
 (Stable Audio + shared sound library at {windows(SFX_LIBRARY)}), speak (Kokoro TTS),
 render_hyperframes, ffmpeg, ffprobe, vertical Shorts from a short.json spec (short_info / short_build /
-short_preview / short_frames), plus job_status / wait_for_job / list_jobs / cancel_job.
+short_preview / short_frames), stills to motion (image_depth / image_cutout / parallax),
+plus job_status / wait_for_job / list_jobs / cancel_job.
 Search the sound library before generating. Dashboard: {PUBLIC_URL}"""
 
 
@@ -188,6 +189,47 @@ def build_mcp(runner: Runner) -> FastMCP:
         return await run("short_frames", {"src": src, "times": [str(t) for t in times],
                                           "region": [str(v) for v in region] if region else None,
                                           "cols": cols, "out": out}, 300)
+
+    @mcp.tool()
+    async def image_depth(images: list[str], soften: float = 0.006, out_dir: str | None = None,
+                          wait_seconds: float = 600) -> dict:
+        """Depth maps for stills (Depth Anything V2 Small, local GPU): <stem>_depth.png per image, 8-bit
+        grayscale, near = white, same size. images may include folders. Default out_dir: a stills folder next
+        to the first image. Needed by parallax mode depth. soften (fraction of the long side) rounds off depth
+        edges so the parallax bends the background instead of tearing a line along outlines; 0 = raw map."""
+        return await run("image_depth", {"images": images, "soften": soften, "out_dir": out_dir}, wait_seconds)
+
+    @mcp.tool()
+    async def image_cutout(images: list[str], plate: bool = False, refine: float = 0, out_dir: str | None = None,
+                           wait_seconds: float = 600) -> dict:
+        """Cut the subject out of stills (BiRefNet, local GPU): <stem>_cut.png (transparent PNG) +
+        <stem>_mask.png. plate=true also writes <stem>_plate.png, the background with the subject removed and
+        filled (needed by parallax mode layers). refine softens edges by that many px. Default out_dir: a
+        stills folder next to the first image. Result lists subject_fraction per image (share of the frame)."""
+        return await run("image_cutout", {"images": images, "plate": plate, "refine": refine, "out_dir": out_dir},
+                         wait_seconds)
+
+    @mcp.tool()
+    async def parallax(image: str,
+                       mode: Literal["depth", "layers"] = "depth",
+                       move: Literal["push-in", "pull-out", "pan-left", "pan-right", "pan-up", "pan-down",
+                                     "drift"] = "push-in",
+                       duration: float = 5, strength: float = 1.0, focus: float = 0.35, size: str = "1080x1920",
+                       center: list[float] | None = None, fps: Literal["24", "30", "60"] = "30",
+                       format: Literal["mp4", "mov", "webm"] = "mp4",
+                       quality: Literal["draft", "looks", "delivery"] | None = None,
+                       output: str | None = None, wait_seconds: float = 900) -> dict:
+        """Turn one still into a moving 2.5D camera shot (HyperFrames render, local). mode depth (default)
+        moves each pixel by its depth map (run image_depth first): best for photos of places, streets, rooms.
+        mode layers slides the cutout over the background plate (run image_cutout with plate=true first): only
+        for one clean, fully cut-out subject (a person, a product); a messy cutout looks wrong. Companion files are found next to the image or in its stills folder. strength 1 = subtle,
+        2 = strong. focus (depth mode) = the depth that stays still: 0 far, 1 near. size WxH or 'source';
+        center = crop center [x, y] in 0..1 for a cover-fit crop (e.g. a landscape photo into 1080x1920).
+        Default output: <stills>\\<stem>_<mode>_<move>.<ext>."""
+        return await run("parallax", {"image": image, "mode": mode, "move": move, "duration": duration,
+                                      "strength": strength, "focus": focus, "size": size,
+                                      "center": [str(v) for v in center] if center else None, "fps": fps,
+                                      "format": format, "quality": quality, "output": output}, wait_seconds)
 
     @mcp.tool()
     async def job_status(job_id: str, log_lines: int = 40) -> dict:

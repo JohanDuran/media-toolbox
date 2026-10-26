@@ -25,6 +25,7 @@ jobs:
           - { name: whisperx,     context: workers, file: workers/Dockerfile.gpu,    target: whisperx }
           - { name: stable-audio, context: workers, file: workers/Dockerfile.gpu,    target: stable-audio }
           - { name: tts,          context: workers, file: workers/Dockerfile.gpu,    target: tts }
+          - { name: vision,       context: workers, file: workers/Dockerfile.gpu,    target: vision }
     steps:
       # The CUDA + torch images are bigger than a runner's free disk; drop preinstalled SDKs first.
       - name: Free disk space

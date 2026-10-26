@@ -5,6 +5,7 @@
 #   whisperx      transcription
 #   stable-audio  SFX / music generation
 #   tts           Kokoro text to speech
+#   vision        depth maps + cutouts for stills (parallax)
 # Every tool image starts from the same base layers, so torch is stored on disk once.
 # Build one tool with: docker compose build <tool>
 
@@ -58,3 +59,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install -r /tmp/requirements.txt -c /etc/toolbox/torch-constraints.txt \
  && python -m spacy download en_core_web_sm
 COPY tts/server.py /app/
+
+FROM base AS vision
+# libgl/libglib: OpenCV's runtime libraries.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+ && rm -rf /var/lib/apt/lists/*
+COPY vision/requirements.txt /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -r /tmp/requirements.txt -c /etc/toolbox/torch-constraints.txt
+COPY vision/server.py /app/
