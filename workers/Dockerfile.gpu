@@ -6,6 +6,7 @@
 #   stable-audio  SFX / music generation
 #   tts           Kokoro text to speech
 #   vision        depth maps + cutouts for stills (parallax)
+#   comfyui       ComfyUI + GGUF nodes for FLUX image generation (driven by the `image` worker)
 # Every tool image starts from the same base layers, so torch is stored on disk once.
 # Build one tool with: docker compose build <tool>
 
@@ -69,3 +70,26 @@ COPY vision/requirements.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install -r /tmp/requirements.txt -c /etc/toolbox/torch-constraints.txt
 COPY vision/server.py /app/
+
+# ComfyUI + ComfyUI-GGUF for FLUX.1 [dev] (GGUF). Not a toolbox worker itself: the `image` worker drives it over
+# its HTTP API and puts it under the GPU lock. Its web UI stays available at 127.0.0.1:8188.
+FROM base AS comfyui
+ARG COMFYUI_REF=v0.42.1
+ARG COMFYUI_GGUF_SHA=6ea2651e7df66d7585f6ffee804b20e92fb38b8a
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git libgl1 libglib2.0-0 \
+ && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 --branch ${COMFYUI_REF} https://github.com/comfyanonymous/ComfyUI.git /opt/ComfyUI \
+ && mkdir -p /opt/ComfyUI/custom_nodes/ComfyUI-GGUF && cd /opt/ComfyUI/custom_nodes/ComfyUI-GGUF \
+ && git init -q && git remote add origin https://github.com/city96/ComfyUI-GGUF.git \
+ && git fetch -q --depth 1 origin ${COMFYUI_GGUF_SHA} && git checkout -q FETCH_HEAD
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -r /opt/ComfyUI/requirements.txt -r /opt/ComfyUI/custom_nodes/ComfyUI-GGUF/requirements.txt \
+      -c /etc/toolbox/torch-constraints.txt
+WORKDIR /opt/ComfyUI
+EXPOSE 8188
+HEALTHCHECK --interval=15s --timeout=5s --start-period=120s \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8188/system_stats', timeout=4)"
+# COMFYUI_ARGS: extra ComfyUI flags. Empty = ComfyUI's own dynamic VRAM management, the fastest on an 8 GB card
+# (measured: --highvram is much slower there, it overcommits VRAM and spills into shared memory).
+CMD ["sh", "-c", "exec python main.py --listen 0.0.0.0 --port 8188 --disable-auto-launch ${COMFYUI_ARGS:-}"]

@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1.7
+#
+# Image worker (CPU): drives the comfyui service for FLUX image generation, wrapped by the same small Python worker
+# server as the other tools. No torch here; ComfyUI does the GPU work.
+
+FROM python:3.12-slim-bookworm
+ENV PYTHONDONTWRITEBYTECODE=1
+RUN pip install --no-cache-dir fastapi==0.156.4 uvicorn==0.54.0 httpx==0.28.1 pillow==12.3.0
+WORKDIR /app
+COPY common/toolbox_worker.py image/server.py image/flux_workflow.json /app/
+EXPOSE 8000
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)"
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "warning"]

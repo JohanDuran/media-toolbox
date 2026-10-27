@@ -22,9 +22,10 @@ never go there): {', '.join(windows(p) for p in PROTECTED_DIRS) or 'none'}.
 Tools: transcribe (WhisperX), timeline_transcript, sfx_search / sfx_generate / sfx_mark / sfx_scan
 (Stable Audio + shared sound library at {windows(SFX_LIBRARY)}), speak (Kokoro TTS),
 render_hyperframes, ffmpeg, ffprobe, vertical Shorts from a short.json spec (short_info / short_build /
-short_preview / short_frames), stills to motion (image_depth / image_cutout / parallax),
-plus job_status / wait_for_job / list_jobs / cancel_job.
-Search the sound library before generating. Dashboard: {PUBLIC_URL}"""
+short_preview / short_frames), stills to motion (image_depth / image_cutout / parallax), FLUX images
+(image_generate), plus job_status / wait_for_job / list_jobs / cancel_job.
+Every tool is optional: use one only when the task needs it. When you need a sound, search the library before
+generating. Dashboard: {PUBLIC_URL}"""
 
 
 def _summary(job: dict, log_lines: int = 15) -> dict:
@@ -230,6 +231,22 @@ def build_mcp(runner: Runner) -> FastMCP:
                                       "strength": strength, "focus": focus, "size": size,
                                       "center": [str(v) for v in center] if center else None, "fps": fps,
                                       "format": format, "quality": quality, "output": output}, wait_seconds)
+
+    @mcp.tool()
+    async def image_generate(prompt: str, size: str = "16:9", quality: Literal["draft", "final"] = "draft",
+                             count: int = 1, seed: int | None = None, turbo: bool = True, steps: int | None = None,
+                             guidance: float = 3.5, name: str | None = None, out_dir: str | None = None,
+                             wait_seconds: float = 900) -> dict:
+        """Generate images with FLUX.1 [dev] (local GPU, via the toolbox's ComfyUI). Writes <name>_s<seed>.png +
+        .json (prompt, seed, size, steps) per image into out_dir (default: toolbox outputs\\images).
+        size: 16:9, 9:16, 1:1, 4:3, 3:4, thumbnail (final is cropped to 1280x720) or WxH. quality draft = smaller
+        and quicker for exploring; re-run a good draft's seed with quality final for full size. count up to 8 (seeds
+        seed, seed+1, ...). turbo (default) = Turbo LoRA at 8 steps. Prompts: descriptive sentences; text to render
+        goes in quotes. No negative prompts, no transparency. Images are yours to use; the weights are
+        non-commercial. Read the PNGs to look at them before using one."""
+        return await run("image_generate", {"prompt": prompt, "size": size, "quality": quality, "count": count,
+                                           "seed": seed, "turbo": turbo, "steps": steps, "guidance": guidance,
+                                           "name": name, "out_dir": out_dir}, wait_seconds)
 
     @mcp.tool()
     async def job_status(job_id: str, log_lines: int = 40) -> dict:

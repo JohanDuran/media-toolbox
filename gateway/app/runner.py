@@ -28,6 +28,9 @@ WORKER_GRACE_SECONDS = 120
 
 
 def _offline_message(worker: str) -> str:
+    if WORKERS.get(worker, {}).get("profile") == "flux":
+        return (f"the {worker} worker isn't running. FLUX images need the 'flux' compose profile "
+                f"(COMPOSE_PROFILES=gpu,flux in .env), then: docker compose up -d comfyui {worker}")
     if WORKERS.get(worker, {}).get("gpu"):
         return (f"the {worker} worker isn't running. GPU tools need an NVIDIA GPU and the 'gpu' compose "
                 f"profile (COMPOSE_PROFILES=gpu in .env), then: docker compose up -d {worker}")
@@ -111,6 +114,9 @@ class Runner:
 
     def _schedule(self) -> None:
         gpu_busy = any(WORKERS.get(w, {}).get("gpu") for w in self.running)
+        # A GPU app used outside the toolbox (ComfyUI's own web UI) also holds the GPU: wait for it.
+        gpu_busy = gpu_busy or any(cfg["gpu"] and self.health[name].get("external_busy")
+                                   for name, cfg in WORKERS.items())
         for job in self.db.queued():
             worker = job["worker"]
             if worker in self.running:
@@ -138,6 +144,7 @@ class Runner:
     async def _check(self, name: str) -> None:
         url = WORKERS[name]["url"]
         h = self.health[name]
+        h["external_busy"] = False  # only a fresh, successful health check can keep the GPU held from outside
         try:
             r = await self.http.get(f"{url}/health", timeout=3)
             r.raise_for_status()

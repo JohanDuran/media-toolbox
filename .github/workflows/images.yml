@@ -1,4 +1,4 @@
-# Builds the five toolbox images and publishes them to GitHub Container Registry, so users can
+# Builds the toolbox images and publishes them to GitHub Container Registry, so users can
 # `docker compose pull` instead of building ~10 GB themselves.
 #   - on a version tag (v0.1.0): tags <version> and latest
 #   - by hand (Actions → images → Run workflow): tags the branch name
@@ -26,6 +26,8 @@ jobs:
           - { name: stable-audio, context: workers, file: workers/Dockerfile.gpu,    target: stable-audio }
           - { name: tts,          context: workers, file: workers/Dockerfile.gpu,    target: tts }
           - { name: vision,       context: workers, file: workers/Dockerfile.gpu,    target: vision }
+          - { name: comfyui,      context: workers, file: workers/Dockerfile.gpu,    target: comfyui }
+          - { name: image,        context: workers, file: workers/Dockerfile.image,  target: "" }
     steps:
       # The CUDA + torch images are bigger than a runner's free disk; drop preinstalled SDKs first.
       - name: Free disk space

@@ -214,6 +214,43 @@ def _prep_parallax(p: dict) -> dict:
     return p
 
 
+# FLUX sizes: (draft, final) per preset, multiples of 16. Drafts are ~0.6 MP for speed, finals ~1 MP.
+IMAGE_SIZES = {
+    "16:9": ((1024, 576), (1344, 768)),
+    "9:16": ((576, 1024), (768, 1344)),
+    "1:1": ((768, 768), (1024, 1024)),
+    "4:3": ((896, 672), (1152, 864)),
+    "3:4": ((672, 896), (864, 1152)),
+    "thumbnail": ((1024, 576), (1344, 768)),  # final is resized and cropped to 1280x720
+}
+
+
+def _prep_image(p: dict) -> dict:
+    size = str(p.get("size") or "16:9").lower()
+    final = (p.get("quality") or "draft") == "final"
+    if size in IMAGE_SIZES:
+        w, h = IMAGE_SIZES[size][1 if final else 0]
+        if size == "thumbnail" and final:
+            p["crop_to"] = [1280, 720]
+    elif re.fullmatch(r"\d{3,4}x\d{3,4}", size):
+        w, h = (int(v) for v in size.split("x"))
+        if not (256 <= w <= 2048 and 256 <= h <= 2048):
+            raise ValueError("width and height must be 256 to 2048")
+    else:
+        raise ValueError(f"size must be one of {sorted(IMAGE_SIZES)} or WxH")
+    p["width"], p["height"] = w - w % 16, h - h % 16
+    turbo = p.get("turbo", True)
+    p["turbo"] = turbo
+    if not p.get("steps"):
+        p["steps"] = 8 if turbo else (12 if not final else 20)
+    if not p.get("out_dir"):
+        p["out_dir"] = check_writable(_out("images"))
+    p["name"] = _slug(p.get("name") or p["prompt"], 40)
+    p.pop("size", None)
+    p.pop("quality", None)
+    return p
+
+
 TOOLS: dict[str, Tool] = {t.name: t for t in [
     Tool(
         "transcribe", "Transcribe", "whisperx", "transcribe", True,
@@ -386,6 +423,27 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
             Param("output", "path_out", "Output file", help="Blank = <stills>\\<stem>_<mode>_<move>.<ext>"),
         ],
         prepare=_prep_parallax,
+    ),
+    Tool(
+        "image_generate", "Generate image", "image", "generate", True,
+        "Generate images with FLUX.1 [dev] (GGUF Q4) in the toolbox's ComfyUI, local GPU. Writes <name>_s<seed>.png "
+        "plus a .json with everything needed to re-create it. Draft = smaller and fast; re-run a draft's seed as "
+        "final for full size. Images are yours to use; the model weights are non-commercial.",
+        [
+            Param("prompt", "longtext", "Prompt", True,
+                  help='Plain sentences; put text that should appear in quotes, e.g. a sign that says "OPEN"'),
+            Param("size", "text", "Size", default="16:9",
+                  help="16:9, 9:16, 1:1, 4:3, 3:4, thumbnail (final = 1280x720) or WxH"),
+            Param("quality", "select", "Quality", default="draft", options=["draft", "final"]),
+            Param("count", "integer", "Images", default=1, help="1 to 8, one seed each"),
+            Param("seed", "integer", "Seed", help="Blank = random; images get seed, seed+1, ..."),
+            Param("turbo", "boolean", "Turbo LoRA (8 steps)", default=True),
+            Param("steps", "integer", "Steps", help="Blank = 8 with turbo, else 12 draft / 20 final"),
+            Param("guidance", "number", "Guidance", default=3.5, help="~2.5 more natural, 3.5 default, 4-5 stricter"),
+            Param("name", "text", "File name", help="Blank = from the prompt"),
+            Param("out_dir", "dir_out", "Output folder", help=f"Blank = {OUTPUTS_DIR}\\images"),
+        ],
+        prepare=_prep_image,
     ),
 ]}
 

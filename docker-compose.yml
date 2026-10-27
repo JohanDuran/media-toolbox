@@ -9,6 +9,8 @@
 # Settings come from .env next to this file. The GPU workers (whisperx, stable-audio, tts, vision) are in
 # the "gpu" profile, on by default via COMPOSE_PROFILES=gpu in .env. Without an NVIDIA GPU, leave
 # COMPOSE_PROFILES empty: ffmpeg, HyperFrames renders and Shorts still work.
+# FLUX image generation (comfyui + its image worker) is the separate "flux" profile, because its models are ~11 GB:
+# COMPOSE_PROFILES=gpu,flux turns it on.
 
 x-host-mounts: &host-mounts
   # Your user folder, read-write: inputs are read from it and outputs written back.
@@ -132,5 +134,72 @@ services:
     shm_size: "2gb"   # Chrome needs more than Docker's 64 MB default
     restart: unless-stopped
 
+  # --- FLUX image generation ("flux" profile) ------------------------------------------------------------
+
+  # One-shot: downloads FLUX.1 [dev] GGUF, its text encoders and VAE, and the Turbo LoRA (~11.5 GB) into the
+  # comfyui_models volume, then exits. Files already there are skipped, so restarts are instant.
+  comfyui-models:
+    image: curlimages/curl:8.11.1
+    profiles: [flux]
+    user: root
+    volumes:
+      - comfyui-models:/models
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        HF=https://huggingface.co
+        get() {
+          mkdir -p "/models/$$1"
+          if [ -s "/models/$$1/$$2" ]; then echo "have $$1/$$2"; return; fi
+          echo "downloading $$1/$$2"
+          curl -fL --retry 5 -C - -o "/models/$$1/$$2.part" "$$3"
+          mv "/models/$$1/$$2.part" "/models/$$1/$$2"
+        }
+        get unet flux1-dev-Q4_K_S.gguf $$HF/city96/FLUX.1-dev-gguf/resolve/main/flux1-dev-Q4_K_S.gguf
+        get text_encoders t5-v1_1-xxl-encoder-Q5_K_M.gguf $$HF/city96/t5-v1_1-xxl-encoder-gguf/resolve/main/t5-v1_1-xxl-encoder-Q5_K_M.gguf
+        get text_encoders clip_l.safetensors $$HF/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors
+        get vae ae.safetensors $$HF/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/vae/ae.safetensors
+        get loras flux1-turbo-alpha.safetensors $$HF/alimama-creative/FLUX.1-Turbo-Alpha/resolve/7b29bf041b413949089d78b826a5c9726e3c8e50/diffusion_pytorch_model.safetensors
+        echo "all FLUX models present"
+    restart: "no"
+
+  comfyui:
+    build:
+      context: workers
+      dockerfile: Dockerfile.gpu
+      target: comfyui
+    image: ghcr.io/johanduran/media-toolbox-comfyui:${TOOLBOX_VERSION:-latest}
+    profiles: [flux]
+    ports:
+      - "127.0.0.1:${COMFYUI_PORT:-8188}:8188"   # ComfyUI's own web UI, for your experiments
+    volumes:
+      - comfyui-models:/opt/ComfyUI/models
+    environment:
+      COMFYUI_ARGS: ${COMFYUI_ARGS:-}
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      comfyui-models:
+        condition: service_completed_successfully
+    <<: *gpu
+    restart: unless-stopped
+
+  # The toolbox worker in front of ComfyUI: runs image_generate jobs through ComfyUI's API, frees its VRAM when
+  # another GPU tool needs it, and reports ComfyUI as busy while you use its UI, so toolbox GPU jobs wait.
+  image:
+    build:
+      context: workers
+      dockerfile: Dockerfile.image
+    image: ghcr.io/johanduran/media-toolbox-image:${TOOLBOX_VERSION:-latest}
+    profiles: [flux]
+    volumes: *host-mounts
+    environment:
+      COMFYUI_URL: http://comfyui:8188
+      PYTHONUNBUFFERED: "1"
+    restart: unless-stopped
+
 volumes:
   toolbox-cache:
+  # FLUX models. Named so an existing volume from a standalone ComfyUI setup is reused, not downloaded again.
+  comfyui-models:
+    name: comfyui_models
