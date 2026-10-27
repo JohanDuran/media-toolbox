@@ -86,6 +86,8 @@ RUN git clone --depth 1 --branch ${COMFYUI_REF} https://github.com/comfyanonymou
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install -r /opt/ComfyUI/requirements.txt -r /opt/ComfyUI/custom_nodes/ComfyUI-GGUF/requirements.txt \
       -c /etc/toolbox/torch-constraints.txt
+# POST /toolbox/exit: lets the image worker restart ComfyUI after an unload, so its system RAM is returned.
+COPY comfyui/toolbox_exit /opt/ComfyUI/custom_nodes/toolbox_exit
 WORKDIR /opt/ComfyUI
 EXPOSE 8188
 HEALTHCHECK --interval=15s --timeout=5s --start-period=120s \

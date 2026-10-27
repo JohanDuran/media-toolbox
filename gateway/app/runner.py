@@ -199,8 +199,17 @@ class Runner:
             if job["gpu"]:
                 await self._make_vram_room(worker, job_id)
             url = WORKERS[worker]["url"]
-            r = await self.http.post(f"{url}/run",
-                                     json={"job_id": job_id, "action": tool.action, "params": job["cparams"]})
+            # A worker may be restarting right now (it recycles itself after an unload): retry for a while.
+            deadline = time.time() + 90
+            while True:
+                try:
+                    r = await self.http.post(f"{url}/run",
+                                             json={"job_id": job_id, "action": tool.action, "params": job["cparams"]})
+                    break
+                except (httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError):
+                    if time.time() > deadline:
+                        raise
+                    await asyncio.sleep(2)
             if r.status_code >= 400:
                 raise RuntimeError(f"{worker} refused the job: {r.text}")
 
@@ -242,9 +251,11 @@ class Runner:
             if other == worker or not cfg["gpu"] or not self.health[other].get("model_loaded"):
                 continue
             try:
-                await self.http.post(f"{cfg['url']}/unload", timeout=60)
+                r = await self.http.post(f"{cfg['url']}/unload", timeout=60)
                 self.health[other]["model_loaded"] = False
-                self.db.append_logs(job_id, [f"{time.strftime('%H:%M:%S')} gateway: unloaded {other} to free VRAM"])
+                recycling = r.status_code < 400 and r.json().get("recycling")
+                self.db.append_logs(job_id, [f"{time.strftime('%H:%M:%S')} gateway: unloaded {other} to free VRAM"
+                                             + (" (restarting it to return its RAM)" if recycling else "")])
             except Exception as e:
                 self.db.append_logs(job_id, [f"{time.strftime('%H:%M:%S')} gateway: couldn't unload {other}: {e}"])
 

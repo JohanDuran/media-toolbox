@@ -37,6 +37,8 @@ x-worker-env: &worker-env
   HF_HUB_DISABLE_SYMLINKS_WARNING: "1"
   PYTHONUNBUFFERED: "1"
   TRANSCRIBE_VOCAB: ${TRANSCRIBE_VOCAB:-}
+  # After the gateway unloads a model, restart the worker so its system RAM is returned too (see toolbox_worker.py).
+  TOOLBOX_RECYCLE_ON_UNLOAD: ${TOOLBOX_RECYCLE_ON_UNLOAD:-1}
 
 services:
   gateway:
@@ -195,6 +197,8 @@ services:
     volumes: *host-mounts
     environment:
       COMFYUI_URL: http://comfyui:8188
+      # After an unload, restart ComfyUI so the FLUX models it keeps in system RAM are returned.
+      COMFYUI_RECYCLE_ON_UNLOAD: ${COMFYUI_RECYCLE_ON_UNLOAD:-1}
       PYTHONUNBUFFERED: "1"
     restart: unless-stopped
 
