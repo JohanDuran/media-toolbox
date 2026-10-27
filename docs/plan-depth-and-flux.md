@@ -1,6 +1,6 @@
 # Plan: depth + cutout and FLUX in the media toolbox
 
-Status: **Phase 1 built and tested** on branch `vision-parallax` (2026-10-26, not committed yet). Phases 2–4 not started.
+Status: **Phase 1 merged** (PR #3, 2026-10-26). **Phase 2 built and tested** on branch `flux-image` (2026-10-26). Phase 3 not started; Phase 4 done for Phase 1's tools (video-studio 0.4.0).
 
 Goal: two new capabilities inside the toolbox, under its one job queue and GPU lock:
 
@@ -189,16 +189,28 @@ Goal: two new capabilities inside the toolbox, under its one job queue and GPU l
 - **Keep:** the folder for a while, and **never delete the `comfyui_models` volume**. The toolbox uses it.
 
 ### Phase 2 done when
-- [ ] Benchmark table filled (same prompt and seed, 1344×768):
+- [x] Benchmark (same prompt, seed 42, 1344×768, RTX 5060). "Warm" = second image of the job, models already loaded:
 
-  | Setup | s / image | VRAM peak | Quality note |
+  | Setup | First image | Warm | Quality note |
   |---|---|---|---|
-  | Old: GGUF, 20 steps, lowvram | 60–100 (today) | | |
-  | GGUF + Turbo, 8 steps, lowvram | | | |
-  | GGUF + Turbo, 8 steps, normalvram | | | |
-- [ ] An `image_generate` job queued behind a `transcribe` job waits, then unloads WhisperX, then runs.
-- [ ] A ComfyUI UI job in progress makes a toolbox `speak` job wait.
-- [ ] 4 drafts at 768-class size finish noticeably faster than one old 1024² image.
+  | GGUF, 20 steps (the old workflow) | 160 s | **126 s** | Reference |
+  | GGUF + Turbo LoRA, 8 steps, `--lowvram` | 76 s | **41 s** | Same composition quality, a little less fine texture |
+  | GGUF + Turbo, 8 steps, ComfyUI default VRAM | 75 s | **45 s** | Same as above (`--lowvram` is a no-op in ComfyUI 0.42) |
+  | GGUF + Turbo, 8 steps, `--highvram` | > 5 min | n/a | Overcommits 8 GB (text encoder 3.7 GB + FLUX 6.6 GB), spills into shared memory: cancelled |
+  | Draft 1024×576, Turbo | n/a | **28 s** | Good enough to pick a direction |
+
+  Result: about **3× faster** than the old workflow. The default is ComfyUI's own VRAM management with no flags.
+- [x] GPU hand-off: `speak` after a FLUX job logged "unloaded image to free VRAM" (ComfyUI `/free`).
+- [x] A prompt queued directly on ComfyUI (as from its web UI) made a toolbox `speak` job wait until it finished
+  (submitted 4 s in, started at 63.2 s, ComfyUI done at 63.5 s), then free ComfyUI's models and run.
+- [x] 4 drafts finished in 28 s each, against 126 s for one old full-size image.
+
+### What testing changed
+- ComfyUI 0.42 has dynamic VRAM management. `--normalvram` no longer exists, and `--lowvram` does nothing, so
+  `COMFYUI_ARGS` defaults to empty.
+- FLUX is its own compose profile (`flux`), so a toolbox install doesn't download ~11.5 GB unless asked.
+- The old standalone stack in `docker\comfyui` is kept as a fallback (stopped). Its MCP on :8189 isn't
+  registered anymore; `image_generate` replaces it.
 
 ---
 

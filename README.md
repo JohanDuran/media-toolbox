@@ -11,6 +11,7 @@ as an MCP server, from any project.
 | `speak` | tts | GPU | Kokoro-82M text to speech (English, Spanish, French, Italian, Portuguese, Hindi) |
 | `render_hyperframes` | render | CPU | Local HyperFrames render, pinned HyperFrames + Chrome |
 | `ffmpeg`, `ffprobe` | render | CPU | Any ffmpeg command, media info |
+| `image_generate` | image → comfyui | GPU | FLUX.1 [dev] images (GGUF Q4 + Turbo LoRA, 8 steps) through a pinned ComfyUI. Optional `flux` profile. See [FLUX images](#flux-images) |
 | `image_depth`, `image_cutout` | vision | GPU | Depth maps (Depth Anything V2 Small) and subject cutouts + background plates (BiRefNet) for stills |
 | `parallax` | render | CPU | One still → a moving 2.5D camera shot (push-in, pull-out, pans, drift), from the cutout + plate or the depth map. See [Stills to motion](#stills-to-motion) |
 | `short_info`, `short_build`, `short_preview`, `short_frames` | render | CPU | Vertical Shorts (1080×1920) built from a `short.json` spec: shots from screen recordings, graphics + word-by-word captions, voice and music/SFX, all timed to the narration's words. See [docs/short-spec.md](docs/short-spec.md) |
@@ -25,7 +26,9 @@ Dashboard: **http://localhost:8765**. MCP: **http://localhost:8765/mcp**.
               ┌──────┴──────┐  gateway: dashboard (React) · REST /api · MCP /mcp
               │   gateway   │  job queue (SQLite) · GPU lock · Windows path conversion
               └──┬───┬───┬──┴───┐
-      whisperx  stable-audio  tts  vision  render   one image per tool, internal network only
+      whisperx  stable-audio  tts  vision  image  render   one image per tool, internal network only
+                                            │
+                                         comfyui   (flux profile; web UI at 127.0.0.1:8188)
                      │
    HOST_HOME (e.g. C:\Users\you) → /host   (inputs and outputs, normal Windows paths in and out)
    HF / torch caches under HOST_HOME\.cache   (models downloaded once, shared)
@@ -153,7 +156,7 @@ docker compose down
 ## Advanced
 
 **Settings** are in `.env` (template: `.env.example`): your user folder, port, studio paths,
-protected folders, `COMPOSE_PROFILES` (`gpu` or empty), `TOOLBOX_VERSION` (image tag) and
+protected folders, `COMPOSE_PROFILES` (`gpu`, `gpu,flux` or empty), `TOOLBOX_VERSION` (image tag) and
 `TRANSCRIBE_VOCAB` (names and terms transcription should recognize).
 
 **Without an NVIDIA GPU:** set `COMPOSE_PROFILES=` (empty). The GPU workers don't start; jobs for
@@ -202,6 +205,26 @@ Turn a still (a listing photo, a screenshot, a generated image) into a moving sh
 
 Renders run in the render worker's Chrome with a software GPU: about 25 s for 3 s of 1080×1920.
 
+## FLUX images
+
+`image_generate` makes images with FLUX.1 [dev] (GGUF Q4) in a pinned ComfyUI, under the same GPU lock as every
+other tool. It's optional: turn it on with `COMPOSE_PROFILES=gpu,flux` in `.env`, then `docker compose up -d`. The
+first start downloads the models (~11.5 GB) into the `comfyui_models` volume. An existing volume of that name is
+reused.
+
+- **Speed on an RTX 5060 (8 GB):** about 45 s per 1344×768 final and 28 s per 1024×576 draft, using the Turbo LoRA
+  at 8 steps. Without Turbo, at 20 steps: about 125 s. The first image after another GPU tool ran takes ~30 s longer
+  (model load).
+- **Drafts, then finals:** generate a few `draft`s, pick one, and re-run its seed with `quality: final`. Each PNG
+  has a `.json` next to it with the prompt, seed, size and steps.
+- **ComfyUI's own UI** stays at http://127.0.0.1:8188 for your experiments. While it works on something, toolbox GPU
+  jobs wait. When a toolbox GPU job needs the card, ComfyUI's models are freed first. Jobs run from its UI don't free
+  the toolbox's models first, so start them when the toolbox is idle.
+- **VRAM mode:** leave `COMFYUI_ARGS` unset. ComfyUI's own dynamic VRAM management is fastest on 8 GB. `--highvram`
+  overcommits the card and is several times slower.
+- **License:** the FLUX.1 [dev] weights and the Turbo LoRA are non-commercial. Under the FLUX.1 [dev] license, the
+  images you generate can be used commercially.
+
 ## Adding a tool
 
 1. `workers/<tool>/server.py`: handlers built with `toolbox_worker.create_app` (same contract as the others).
@@ -220,3 +243,5 @@ The toolbox code is MIT (see [LICENSE](LICENSE)). The models it downloads have t
 - Kokoro-82M: Apache 2.0.
 - Depth Anything V2 **Small**: Apache 2.0. (The Base and Large versions are non-commercial: don't swap them in.)
 - BiRefNet: MIT.
+- FLUX.1 [dev] (city96 GGUF) and FLUX.1-Turbo-Alpha LoRA: FLUX.1 [dev] Non-Commercial License (weights);
+  generated images may be used commercially.

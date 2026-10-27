@@ -70,7 +70,10 @@ def create_app(
     info: Callable[[], dict] | None = None,
     loaded: Callable[[], bool] | None = None,
     unload: Callable[[], None] | None = None,
+    external_busy: Callable[[], bool] | None = None,
 ) -> FastAPI:
+    """external_busy: for workers that front another app (ComfyUI), true while that app is working on
+    something the toolbox didn't start. The gateway then keeps other GPU jobs waiting."""
     app = FastAPI(title=f"toolbox worker: {name}")
     jobs: OrderedDict[str, JobContext] = OrderedDict()
     lock = threading.Lock()
@@ -92,8 +95,14 @@ def create_app(
 
     @app.get("/health")
     def health():
-        return {"ok": True, "busy": state["current"] is not None, "job_id": state["current"],
-                "model_loaded": bool(loaded and loaded())}
+        ext = False
+        if external_busy and state["current"] is None:
+            try:
+                ext = bool(external_busy())
+            except Exception:
+                ext = False
+        return {"ok": True, "busy": state["current"] is not None or ext, "job_id": state["current"],
+                "external_busy": ext, "model_loaded": bool(loaded and loaded())}
 
     @app.get("/info")
     def get_info():
