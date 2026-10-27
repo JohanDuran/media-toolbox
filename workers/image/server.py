@@ -60,6 +60,31 @@ def external_busy() -> bool:
 def unload() -> None:
     http.post("/free", json={"unload_models": True, "free_memory": True}, timeout=30)
     state["loaded"] = False
+    # /free keeps the models in system RAM (13+ GB). Restart ComfyUI so that comes back too. (This worker itself holds
+    # almost nothing, so it doesn't use TOOLBOX_RECYCLE_ON_UNLOAD.)
+    if os.environ.get("COMFYUI_RECYCLE_ON_UNLOAD", "1") == "1":
+        try:
+            http.post("/toolbox/exit", timeout=5)
+        except httpx.HTTPError:
+            pass
+
+
+def wait_for_comfy(ctx: JobContext, seconds: int = 180) -> None:
+    """ComfyUI may be restarting (after an unload): wait for it instead of failing the job."""
+    deadline = time.monotonic() + seconds
+    told = False
+    while True:
+        try:
+            _stats()
+            return
+        except httpx.HTTPError:
+            if time.monotonic() > deadline:
+                raise RuntimeError("ComfyUI isn't reachable. Start it with: docker compose up -d comfyui "
+                                   "(needs the flux profile; the first start downloads the models)")
+            if not told:
+                ctx.log("waiting for ComfyUI to start")
+                told = True
+            time.sleep(2)
 
 
 def info() -> dict:
@@ -132,12 +157,8 @@ def _crop(png: bytes, size: list[int]) -> bytes:
 
 
 def generate(p: dict, ctx: JobContext) -> dict:
-    try:
-        _stats()
-    except httpx.HTTPError:
-        raise RuntimeError("ComfyUI isn't reachable. Start it with: docker compose up -d comfyui "
-                           "(needs the flux profile; the first start downloads the models)")
-    count = max(1, min(8, int(p.get("count") or 1)))
+    wait_for_comfy(ctx)
+    count =max(1, min(8, int(p.get("count") or 1)))
     first = int(p["seed"]) if p.get("seed") not in (None, "") else random.randint(0, 2**31 - 1)
     out = Path(p["out_dir"])
     out.mkdir(parents=True, exist_ok=True)

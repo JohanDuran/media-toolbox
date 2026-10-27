@@ -226,6 +226,63 @@ Goal: two new capabilities inside the toolbox, under its one job queue and GPU l
   Otherwise remove it.
 - **License:** check the Nunchaku code and the quantized model's license when installing.
 
+### Phase 3 result (2026-10-26): not adopted
+
+Tested in a separate image (trial files on branch `nunchaku-trial`, `trials/nunchaku/`): Nunchaku 1.2.1 wheel
+for cu12.8/torch2.8/cp312 (sha256-pinned) + ComfyUI-nunchaku v1.2.1 (without its PuLID face extras), FP4 model
+`svdq-fp4_r32-flux.1-dev` (6.6 GB, FLUX.1 dev non-commercial license). The repos now live at github.com/nunchux-ai
+(redirected from mit-han-lab and nunchaku-tech). It installed and loaded fine on ComfyUI 0.42.1.
+
+| 1344×768, seed 42/43 | Warm per image | Draft 1024×576 |
+|---|---|---|
+| GGUF Q4 + Turbo (Phase 2, current) | **45 s** | **28 s** |
+| Nunchaku FP4 + Turbo, `cpu_offload: auto` | 83 s | 90 s |
+| Nunchaku FP4 + Turbo, `cpu_offload: disable` | 56 s | 58 s |
+| Nunchaku FP4, 20 steps, no LoRA | 52 s first, then 192 s (swapping) | n/a |
+
+Nunchaku was **slower** than the current setup in every run, far from the ≥ 2× bar. Part of that is memory pressure
+(below), but GGUF is also smaller on the GPU. Decision: drop it, keep GGUF + Turbo.
+
+### Found during Phase 3: the Docker VM runs out of system RAM
+- Docker Desktop's WSL VM gets half of the PC's RAM by default (no `.wslconfig`): ~15.8 GB of 31.6 GB.
+- ComfyUI peaks at **8.5–10.5 GB of system RAM** while loading FLUX (7.5 GB resident afterwards, models cached).
+  The idle GPU workers hold another ~4 GB (WhisperX 1.6, Stable Audio 1.3, TTS 0.9), and the VM's 4 GB swap filled
+  up and stayed full.
+- Result: the kernel OOM-killed ComfyUI during model loads (trial image and main image alike), and finally WSL
+  stopped responding (`Wsl/Service/0x8007274c`), needing a Docker Desktop restart.
+- The Phase 2 benchmark ran fine only because memory happened to be freer then. This affects the merged setup.
+- **Fix chosen (2026-10-26): options 1 and 2.** `.wslconfig` written with `memory=22GB`, `swap=8GB`, and GPU workers
+  recycle after an unload (branch `worker-recycle`). Option 3 not adopted.
+- **Result (2026-10-27, VM now 22 GB + 8 GB swap):**
+  - speak → FLUX draft → speak → depth → 2 FLUX finals: VM peak **15.1 GB of 22**, swap 0.2 GB, no crash.
+  - Workers after their restart: tts 1.9 → 0.6 GB, vision 1.0 → 0.4 GB.
+  - With more RAM, ComfyUI kept FLUX in RAM after `/free` (13.4 GB idle), so ComfyUI is recycled too: the image worker
+    calls `POST /toolbox/exit` (a tiny route built into the comfyui image) after `/free`. Measured: ComfyUI 10.6 →
+    0.7 GB and the VM 11.9 → 4.6 GB after a `speak`. The next FLUX job waited for ComfyUI and ran normally (first
+    draft ~80 s, same as before the change).
+  - Getting there: stopping Docker Desktop by force left a stale `%LOCALAPPDATA%\Docker\run\dockerInference`
+    socket that blocked startup ("starting services: initializing Inference manager"). Moving the `run` folder
+    aside (`run.stale-20261027`) fixed it; Docker recreated it.
+- Fix options considered:
+  1. Give the WSL VM more RAM: `%USERPROFILE%\.wslconfig` with `[wsl2]` `memory=22GB` (applies after `wsl --shutdown`).
+  2. Make `/unload` also free system RAM in the GPU workers (they keep ~1–1.6 GB each after unloading VRAM), or
+     stop idle workers.
+  3. Start ComfyUI with `--disable-pinned-memory` (still peaked at 8.5 GB in the one run before the VM hung;
+     not conclusive) or `--cache-none`.
+- Measured after a Docker restart (clean VM, swap empty), one sequence: speak → FLUX draft → speak → depth:
+
+  | Container | Start | Peak | End |
+  |---|---|---|---|
+  | Whole VM | 3.6 GB | **14.5 GB** of 15.8 | 8.3 GB (+2 GB swap) |
+  | comfyui | 0.7 GB | **10.3 GB** (loading FLUX) | 3.4 GB after `/free` |
+  | tts | 0.6 GB | 2.5 GB | 2.5 GB, even after unload |
+  | vision | 0.4 GB | 1.0 GB | 1.0 GB after unload |
+
+  So even a clean start gets within ~1.3 GB of the limit on one draft. The workers' RAM doesn't come back after
+  `/unload` (only VRAM does). With `--disable-pinned-memory`, ComfyUI's peak was 9.2 GB instead of 10.3 GB.
+- Also seen: the gateway's `POST /api/workers/{name}/unload` timed out at 60 s once while a worker was freeing
+  memory (the unload still completed).
+
 ---
 
 ## Phase 4: plugin, dashboard, docs

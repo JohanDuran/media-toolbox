@@ -12,10 +12,16 @@ background thread and exposes:
 
 Paths in params and results are container paths (/host/...); the gateway converts
 them from and to Windows paths.
+
+TOOLBOX_RECYCLE_ON_UNLOAD=1: after /unload of a loaded model, the worker process exits and Docker restarts the
+container (restart: unless-stopped). Freeing a model returns its VRAM but not the process's system RAM (the voice
+worker kept 2.5 GB after unloading); a fresh process gives all of it back. The model has to load again on the next
+job anyway, so this only adds the few seconds of the restart.
 """
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 import traceback
@@ -158,9 +164,15 @@ def create_app(
     def do_unload():
         if state["current"] is not None:
             raise HTTPException(409, "busy")
+        was_loaded = bool(loaded and loaded())
         if unload:
             unload()
-        return {"model_loaded": bool(loaded and loaded())}
+        recycle = was_loaded and os.environ.get("TOOLBOX_RECYCLE_ON_UNLOAD") == "1"
+        if recycle:
+            # Answer first, then exit; Docker restarts the container with a clean process.
+            print(f"[{name}] unloaded; restarting the worker to return its system RAM", flush=True)
+            threading.Timer(0.5, lambda: os._exit(0)).start()
+        return {"model_loaded": bool(loaded and loaded()), "recycling": recycle}
 
     return app
 

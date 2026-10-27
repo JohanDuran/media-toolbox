@@ -36,7 +36,12 @@ Dashboard: **http://localhost:8765**. MCP: **http://localhost:8765/mcp**.
 
 - **One job per worker, one GPU job at a time.** Before a GPU job starts, the other GPU workers are
   asked to unload their models, so an 8 GB card never runs out of VRAM. A model stays loaded between
-  jobs of the same tool, so the second transcription starts instantly.
+  jobs of the same tool, so the second transcription starts instantly. After an unload, the worker restarts
+  itself (a few seconds) so its system RAM is returned as well (`TOOLBOX_RECYCLE_ON_UNLOAD`, on by default).
+  ComfyUI is restarted the same way (`COMFYUI_RECYCLE_ON_UNLOAD`): its `/free` keeps FLUX in system RAM (13+ GB).
+- **System RAM:** Docker Desktop's VM gets half of the PC's RAM by default. With FLUX on, give it more: loading
+  FLUX peaks at ~10 GB in ComfyUI. On a 32 GB PC, `%USERPROFILE%\.wslconfig` with `[wsl2]`, `memory=22GB` and
+  `swap=8GB`, then `wsl --shutdown` and start Docker Desktop again.
 - **Paths:** pass normal Windows paths under `HOST_HOME`; the gateway converts them. Anything
   outside that folder is refused with a clear message.
 - **Protected folders:** nothing is ever written into `PROTECTED_DIRS` (e.g. your raw recordings).
@@ -217,6 +222,8 @@ reused.
   (model load).
 - **Drafts, then finals:** generate a few `draft`s, pick one, and re-run its seed with `quality: final`. Each PNG
   has a `.json` next to it with the prompt, seed, size and steps.
+- **After another GPU tool runs**, ComfyUI is restarted to return its RAM, so the next image waits ~20 s for it
+  and loads FLUX again (~80 s for that first draft).
 - **ComfyUI's own UI** stays at http://127.0.0.1:8188 for your experiments. While it works on something, toolbox GPU
   jobs wait. When a toolbox GPU job needs the card, ComfyUI's models are freed first. Jobs run from its UI don't free
   the toolbox's models first, so start them when the toolbox is idle.
