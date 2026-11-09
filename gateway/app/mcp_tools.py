@@ -20,8 +20,8 @@ INSTRUCTIONS = f"""Local media toolbox (free, runs on this PC in Docker; GPU too
 Windows paths; anything under the user's home folder works. Protected folders (read-only, outputs
 never go there): {', '.join(windows(p) for p in PROTECTED_DIRS) or 'none'}.
 Tools: transcribe (WhisperX), timeline_transcript, sfx_search / sfx_generate / sfx_mark / sfx_scan
-(Stable Audio + shared sound library at {windows(SFX_LIBRARY)}), speak (Kokoro TTS),
-render_hyperframes, ffmpeg, ffprobe, vertical Shorts from a short.json spec (short_info / short_build /
+(Stable Audio + shared sound library at {windows(SFX_LIBRARY)}), speak (Kokoro TTS, the default),
+speak_clone (a cloned voice from a voice profile, Chatterbox Turbo), render_hyperframes, ffmpeg, ffprobe, vertical Shorts from a short.json spec (short_info / short_build /
 short_preview / short_frames), stills to motion (image_depth / image_cutout / parallax), FLUX images
 (image_generate), plus job_status / wait_for_job / list_jobs / cancel_job.
 Every tool is optional: use one only when the task needs it. When you need a sound, search the library before
@@ -128,6 +128,19 @@ def build_mcp(runner: Runner) -> FastMCP:
         Blank lines in text become short pauses."""
         return await run("speak", {"text": text, "voice": voice, "speed": speed, "out_path": out_path,
                                    "pause": pause}, wait_seconds)
+
+    @mcp.tool()
+    async def speak_clone(text: str, voice: str | None = None, ref_path: str | None = None,
+                          out_path: str | None = None, pause: float = 0.35, spell_numbers: bool = True,
+                          temperature: float = 0.8, seed: int | None = None, wait_seconds: float = 900) -> dict:
+        """Text to speech in a cloned voice with Chatterbox Turbo (free, local, English only). Writes a 24 kHz
+        mono WAV. voice = a profile name from the voices folder (call with no voice to list them), or ref_path =
+        any clean 10-20 s speech WAV. Numbers are spelled out first ($43,300, 7.32%), since digits get misread.
+        Only clone a voice with that person's consent. Kokoro (speak) stays the default voice; outputs carry an
+        inaudible AI watermark, and realistic cloned voices need YouTube's altered/synthetic disclosure."""
+        return await run("speak_clone", {"text": text, "voice": voice, "ref_path": ref_path, "out_path": out_path,
+                                         "pause": pause, "spell_numbers": spell_numbers,
+                                         "temperature": temperature, "seed": seed}, wait_seconds)
 
     @mcp.tool()
     async def render_hyperframes(project_dir: str, output: str | None = None, composition: str | None = None,
