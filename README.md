@@ -8,7 +8,8 @@ as an MCP server, from any project.
 | `transcribe` | whisperx | GPU | WhisperX transcripts with word timings (.json, .srt, .words.tsv) |
 | `timeline_transcript` | gateway | CPU | Maps per-file transcripts onto a Resolve timeline |
 | `sfx_generate` + sound library | stable-audio | GPU | Stable Audio Open 1.0 SFX / music beds, cataloged in the shared library |
-| `speak` | tts | GPU | Kokoro-82M text to speech (English, Spanish, French, Italian, Portuguese, Hindi) |
+| `speak` | tts | GPU | Kokoro-82M text to speech (English, Spanish, French, Italian, Portuguese, Hindi). The default voice |
+| `speak_clone` | voice-clone | GPU | Chatterbox Turbo: English speech in a cloned voice from a voice profile (a 10–20 s clip). See [Cloned voices](#cloned-voices) |
 | `render_hyperframes` | render | CPU | Local HyperFrames render, pinned HyperFrames + Chrome |
 | `ffmpeg`, `ffprobe` | render | CPU | Any ffmpeg command, media info |
 | `image_generate` | image → comfyui | GPU | FLUX.1 [dev] images (GGUF Q4 + Turbo LoRA, 8 steps) through a pinned ComfyUI. Optional `flux` profile. See [FLUX images](#flux-images) |
@@ -26,7 +27,7 @@ Dashboard: **http://localhost:8765**. MCP: **http://localhost:8765/mcp**.
               ┌──────┴──────┐  gateway: dashboard (React) · REST /api · MCP /mcp
               │   gateway   │  job queue (SQLite) · GPU lock · Windows path conversion
               └──┬───┬───┬──┴───┐
-      whisperx  stable-audio  tts  vision  image  render   one image per tool, internal network only
+  whisperx  stable-audio  tts  voice-clone  vision  image  render   one image per tool, internal network only
                                             │
                                          comfyui   (flux profile; web UI at 127.0.0.1:8188)
                      │
@@ -210,6 +211,34 @@ Turn a still (a listing photo, a screenshot, a generated image) into a moving sh
 
 Renders run in the render worker's Chrome with a software GPU: about 25 s for 3 s of 1080×1920.
 
+## Cloned voices
+
+`speak_clone` reads text in a real person's voice with Chatterbox Turbo (Resemble AI, 350M). Kokoro (`speak`) stays
+the default; use a cloned voice when a video should sound like you. **Only clone a voice with that person's consent.**
+
+1. **Make a voice profile:** put a `<name>.wav` in `VOICES_DIR` (default `<OUTPUTS_DIR>\voices`). Use 10–20 s of clean
+   speech by one person: a good mic, no music or room echo, normal narration pace. Only the first ~15 s are used, and
+   it must be longer than 5 s. Loudness-normalize it (e.g. `ffmpeg -i in.wav -af loudnorm=I=-18:TP=-1.5 -ac 1 out.wav`).
+   The clone copies the clip's delivery too, so record it the way you want the voiceover to sound.
+2. **Speak:** `speak_clone` with `voice: <name>`, or `ref_path` for a one-off clip. Leave `voice` out to list the profiles.
+3. **Numbers are spelled out first** (`$43,300` → "forty-three thousand, three hundred dollars", `7.32%` → "seven point
+   three two percent", `2026` → "twenty twenty-six"): voice-clone models misread digits. Turn it off with
+   `spell_numbers: false`, or write a number as words yourself to control how it's read.
+4. Long text is split at sentences (~280 characters per pass) and blank lines become `pause` seconds of silence.
+   Reuse a `seed` for a repeatable take.
+
+- **Speed and VRAM on an RTX 5060 (8 GB):** ~4 GB of VRAM. A cold start takes ~25 s (model + reference), then about
+  1 s per 3 s of speech. The encoded reference is kept while the same profile is used again.
+- **English only.** For Spanish and other languages, use Kokoro.
+- **Watermark:** every output carries Resemble's inaudible Perth watermark, which marks it as AI-generated. It
+  survives MP3 and edits. On YouTube, tick "altered or synthetic content" for videos with a realistic cloned voice.
+- **Why Chatterbox Turbo:** in a blind test on an 8 GB RTX 5060 against Chatterbox (original) and Fish Audio S2 Pro
+  (q6_k GGUF via s2.cpp), it was the only one word-perfect on both the raw and the spelled-out script, the fastest
+  (~real time), and the lightest. S2 Pro needed ~6.9 GB, ran ~2.6× slower than real time and glitched on one take.
+- **Pinned:** Chatterbox is retired upstream (August 2026, MIT, no updates). Its requirements are pinned, and
+  `workers/voice-clone/overrides.txt` keeps the base torch 2.8 build, because chatterbox pins torch 2.6, which has no
+  RTX 50 kernels.
+
 ## FLUX images
 
 `image_generate` makes images with FLUX.1 [dev] (GGUF Q4) in a pinned ComfyUI, under the same GPU lock as every
@@ -248,6 +277,7 @@ The toolbox code is MIT (see [LICENSE](LICENSE)). The models it downloads have t
 - WhisperX / faster-whisper large-v3: MIT / Apache 2.0.
 - Stable Audio Open 1.0: Stability AI Community License (free under $1M yearly revenue).
 - Kokoro-82M: Apache 2.0.
+- Chatterbox Turbo (Resemble AI): MIT. Outputs are watermarked (Perth).
 - Depth Anything V2 **Small**: Apache 2.0. (The Base and Large versions are non-commercial: don't swap them in.)
 - BiRefNet: MIT.
 - FLUX.1 [dev] (city96 GGUF) and FLUX.1-Turbo-Alpha LoRA: FLUX.1 [dev] Non-Commercial License (weights);

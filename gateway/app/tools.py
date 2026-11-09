@@ -15,7 +15,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
 from . import library
-from .config import OUTPUTS_DIR, SFX_LIBRARY
+from .config import OUTPUTS_DIR, SFX_LIBRARY, VOICES_DIR
 from .paths import PathError, check_writable, looks_like_path, protected_dir, to_container
 from .timeline import timeline_transcript
 
@@ -89,6 +89,34 @@ def _finish_sfx(result: dict, cparams: dict) -> dict:
 def _prep_speak(p: dict) -> dict:
     if not p.get("out_path"):
         p["out_path"] = f"{_out('speech')}/{_slug(p['text'], 30)}_{time.strftime('%Y%m%d-%H%M%S')}.wav"
+    return p
+
+
+def voice_profiles() -> list[str]:
+    """Names of the voice profiles in VOICES_DIR (<name>.wav)."""
+    from pathlib import Path
+
+    d = Path(to_container(VOICES_DIR))
+    return sorted(f.stem for f in d.glob("*.wav")) if d.is_dir() else []
+
+
+def _prep_speak_clone(p: dict) -> dict:
+    from pathlib import Path
+
+    if not p.get("ref_path"):
+        voice = (p.get("voice") or "").strip()
+        if not voice:
+            raise ValueError(f"speak_clone: give a voice profile ({', '.join(voice_profiles()) or 'none yet'}) "
+                             f"or a ref_path; profiles live in {VOICES_DIR}")
+        p["ref_path"] = to_container(f"{VOICES_DIR}/{voice}.wav")
+        if not Path(p["ref_path"]).is_file():
+            raise ValueError(f"speak_clone: no voice profile {voice!r} in {VOICES_DIR} "
+                             f"(have: {', '.join(voice_profiles()) or 'none'})")
+    elif not Path(p["ref_path"]).is_file():
+        raise ValueError(f"speak_clone: reference {p['ref_path']} not found")
+    p.pop("voice", None)
+    if not p.get("out_path"):
+        p["out_path"] = f"{_out('speech')}/{_slug(p['text'], 30)}_clone_{time.strftime('%Y%m%d-%H%M%S')}.wav"
     return p
 
 
@@ -314,6 +342,24 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
             Param("out_path", "path_out", "Output .wav", help=f"Blank = {OUTPUTS_DIR}\\speech"),
         ],
         prepare=_prep_speak,
+    ),
+    Tool(
+        "speak_clone", "Speak in a cloned voice", "voice-clone", "speak_clone", True,
+        "Turn text into a voiceover WAV in a cloned voice with Chatterbox Turbo (free, local, English). Pick a "
+        f"voice profile from {VOICES_DIR} or give a reference WAV (10-20 s of clean speech, > 5 s required). "
+        "Numbers are spelled out first so they're read correctly. Outputs carry Resemble's inaudible AI watermark.",
+        [
+            Param("text", "longtext", "Text", True, help="Blank lines split paragraphs"),
+            Param("voice", "text", "Voice profile", help=f"Name of a .wav in {VOICES_DIR}, e.g. jdkoder"),
+            Param("ref_path", "path_in", "Reference .wav", help="Instead of a profile: any clean speech clip"),
+            Param("pause", "number", "Pause between paragraphs (s)", default=0.35),
+            Param("spell_numbers", "boolean", "Spell numbers out", default=True,
+                  help="$43,300 -> forty-three thousand, three hundred dollars"),
+            Param("temperature", "number", "Temperature", default=0.8),
+            Param("seed", "integer", "Seed", help="Blank = random; reuse one for a repeatable take"),
+            Param("out_path", "path_out", "Output .wav", help=f"Blank = {OUTPUTS_DIR}\\speech"),
+        ],
+        prepare=_prep_speak_clone,
     ),
     Tool(
         "render_hyperframes", "Render HyperFrames", "render", "render", False,

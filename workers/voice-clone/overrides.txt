@@ -1,0 +1,4 @@
+# chatterbox-tts pins torch/torchaudio 2.6.0, which have no RTX 50 (sm_120) kernels. Keep the base image's
+# torch 2.8 + CUDA 12.8 build instead (tested on an RTX 5060, 2026-11-08).
+torch>=2.6
+torchaudio>=2.6

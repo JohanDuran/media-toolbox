@@ -25,6 +25,7 @@ jobs:
           - { name: whisperx,     context: workers, file: workers/Dockerfile.gpu,    target: whisperx }
           - { name: stable-audio, context: workers, file: workers/Dockerfile.gpu,    target: stable-audio }
           - { name: tts,          context: workers, file: workers/Dockerfile.gpu,    target: tts }
+          - { name: voice-clone,  context: workers, file: workers/Dockerfile.gpu,    target: voice-clone }
           - { name: vision,       context: workers, file: workers/Dockerfile.gpu,    target: vision }
           - { name: comfyui,      context: workers, file: workers/Dockerfile.gpu,    target: comfyui }
           - { name: image,        context: workers, file: workers/Dockerfile.image,  target: "" }

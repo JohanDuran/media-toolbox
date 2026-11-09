@@ -5,6 +5,7 @@
 #   whisperx      transcription
 #   stable-audio  SFX / music generation
 #   tts           Kokoro text to speech
+#   voice-clone   Chatterbox Turbo: speech in a cloned voice from a reference clip
 #   vision        depth maps + cutouts for stills (parallax)
 #   comfyui       ComfyUI + GGUF nodes for FLUX image generation (driven by the `image` worker)
 # Every tool image starts from the same base layers, so torch is stored on disk once.
@@ -60,6 +61,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install -r /tmp/requirements.txt -c /etc/toolbox/torch-constraints.txt \
  && python -m spacy download en_core_web_sm
 COPY tts/server.py /app/
+
+FROM base AS voice-clone
+# Chatterbox Turbo voice cloning. overrides.txt keeps the base torch (chatterbox pins torch 2.6: no RTX 50 kernels).
+COPY voice-clone/requirements.txt voice-clone/overrides.txt /tmp/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -r /tmp/requirements.txt --override /tmp/overrides.txt -c /etc/toolbox/torch-constraints.txt
+COPY voice-clone/spell.py voice-clone/server.py /app/
 
 FROM base AS vision
 # libgl/libglib: OpenCV's runtime libraries.

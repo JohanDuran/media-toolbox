@@ -11,6 +11,8 @@ HOST_HOME = _norm(os.environ["HOST_HOME"])  # required: set it in .env (see .env
 CONTAINER_HOME = "/host"
 OUTPUTS_DIR = _norm(os.environ.get("OUTPUTS_DIR", f"{HOST_HOME}/media-toolbox-outputs"))
 SFX_LIBRARY = _norm(os.environ.get("SFX_LIBRARY", f"{OUTPUTS_DIR}/sfx_library"))
+# Voice profiles for speak_clone: <name>.wav (10-20 s of clean speech by that person, with their consent).
+VOICES_DIR = _norm(os.environ.get("VOICES_DIR", f"{OUTPUTS_DIR}/voices"))
 PROTECTED_DIRS = [_norm(p) for p in os.environ.get("PROTECTED_DIRS", "").split(",") if p.strip()]
 # Where the dashboard looks for Shorts projects (folders with a short.json, up to 2 levels deep).
 SHORTS_ROOT = _norm(os.environ.get("SHORTS_ROOT", f"{HOST_HOME}/Documents/Projects"))
@@ -24,6 +26,7 @@ WORKERS = {
     "whisperx": {"url": "http://whisperx:8000", "gpu": True, "title": "WhisperX transcription"},
     "stable-audio": {"url": "http://stable-audio:8000", "gpu": True, "title": "Stable Audio SFX"},
     "tts": {"url": "http://tts:8000", "gpu": True, "title": "Kokoro text to speech"},
+    "voice-clone": {"url": "http://voice-clone:8000", "gpu": True, "title": "Chatterbox voice clone"},
     "vision": {"url": "http://vision:8000", "gpu": True, "title": "Depth + cutout"},
     # The image worker itself has no GPU, but it fronts ComfyUI, which does: it takes part in the GPU lock.
     "image": {"url": "http://image:8000", "gpu": True, "title": "FLUX images (ComfyUI)", "profile": "flux"},
