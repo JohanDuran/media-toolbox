@@ -10,15 +10,17 @@ as an MCP server, from any project.
 | `sfx_generate` + sound library | stable-audio | GPU | Stable Audio Open 1.0 SFX / music beds, cataloged in the shared library |
 | `speak` | tts | GPU | Kokoro-82M text to speech (English, Spanish, French, Italian, Portuguese, Hindi). The default voice |
 | `speak_clone` | voice-clone | GPU | Chatterbox Turbo: English speech in a cloned voice from a voice profile (a 10–20 s clip). See [Cloned voices](#cloned-voices) |
-| `render_hyperframes` | render | CPU | Local HyperFrames render, pinned HyperFrames + Chrome |
 | `ffmpeg`, `ffprobe` | render | CPU | Any ffmpeg command, media info |
 | `image_generate` | image → comfyui | GPU | FLUX.1 [dev] images (GGUF Q4 + Turbo LoRA, 8 steps) through a pinned ComfyUI. Optional `flux` profile. See [FLUX images](#flux-images) |
-| `image_depth`, `image_cutout` | vision | GPU | Depth maps (Depth Anything V2 Small) and subject cutouts + background plates (BiRefNet) for stills |
-| `parallax` | render | CPU | One still → a moving 2.5D camera shot (push-in, pull-out, pans, drift), from the cutout + plate or the depth map. See [Stills to motion](#stills-to-motion) |
 | `short_info`, `short_frames` | render | CPU | Helpers for `short.json` Shorts: read a spec, grab labelled frame grids from a recording. See [docs/short-spec.md](docs/short-spec.md) |
 | `short_build`, `short_preview` | render | CPU | **Deprecated**: [MangoAI](https://github.com/JohanDuran/MangoAI) now previews, edits and renders `short.json` projects (same look, −14 LUFS). Kept working for old projects |
 
 Dashboard: **http://localhost:8765**. MCP: **http://localhost:8765/mcp**.
+
+**The toolbox makes media; [MangoAI](https://github.com/JohanDuran/MangoAI) edits and renders it.** Since v0.4.0
+HyperFrames renders (`render_hyperframes`), the parallax shots and their depth/cutout models are gone from here:
+MangoAI's `comp_render` and `export` render HyperFrames, and a plain zoom or an animation replaces parallax.
+MangoAI also calls this toolbox from its Toolbox tab (sounds, voice lines, transcription).
 
 ## Architecture
 
@@ -28,9 +30,9 @@ Dashboard: **http://localhost:8765**. MCP: **http://localhost:8765/mcp**.
               ┌──────┴──────┐  gateway: dashboard (React) · REST /api · MCP /mcp
               │   gateway   │  job queue (SQLite) · GPU lock · Windows path conversion
               └──┬───┬───┬──┴───┐
-  whisperx  stable-audio  tts  voice-clone  vision  image  render   one image per tool, internal network only
-                                            │
-                                         comfyui   (flux profile; web UI at 127.0.0.1:8188)
+  whisperx  stable-audio  tts  voice-clone  image  render   one image per tool, internal network only
+                                     │
+                                  comfyui   (flux profile; web UI at 127.0.0.1:8188)
                      │
    HOST_HOME (e.g. C:\Users\you) → /host   (inputs and outputs, normal Windows paths in and out)
    HF / torch caches under HOST_HOME\.cache   (models downloaded once, shared)
@@ -64,10 +66,10 @@ media-toolbox/
 │   └── web/              dashboard (React + TypeScript, built into the gateway image)
 └── workers/
     ├── Dockerfile.gpu    one shared torch base + a target per GPU tool
-    ├── Dockerfile.render HyperFrames + Chrome + ffmpeg
+    ├── Dockerfile.render ffmpeg + the Shorts helpers (no Node or Chrome)
     ├── common/           the worker contract (toolbox_worker.py), the Shorts spec parser (shorts_spec.py),
     │                     the pinned torch build
-    ├── render/           server.py + shorts_build.py (the Shorts engine), templates/parallax (HyperFrames)
+    ├── render/           server.py + shorts_build.py (the deprecated Shorts engine)
     └── <tool>/           server.py + requirements.txt (pinned)
 ```
 
@@ -75,8 +77,8 @@ media-toolbox/
 
 - Windows 10/11 with [Docker Desktop](https://www.docker.com/products/docker-desktop/) (WSL 2 backend).
 - For the GPU tools (transcription, sound effects, text to speech): an NVIDIA GPU with a current
-  driver (CUDA 12.8; RTX 50 series supported). 8 GB of VRAM is enough. Without one, ffmpeg,
-  HyperFrames renders and Shorts still work.
+  driver (CUDA 12.8; RTX 50 series supported). 8 GB of VRAM is enough. Without one, ffmpeg
+  and the Shorts helpers still work.
 - About 40 GB of disk for the images and models.
 
 ## Quick install
@@ -193,24 +195,6 @@ curl -s -X POST localhost:8765/api/jobs -H "Content-Type: application/json" -d "
 ```
 
 Then `GET /api/jobs/<id>` (or `POST /api/jobs/<id>/wait`). `GET /api/tools` lists every tool's parameters.
-
-## Stills to motion
-
-Turn a still (a listing photo, a screenshot, a generated image) into a moving shot:
-
-1. `image_depth` → `<stem>_depth.png` in a `stills` folder next to the image (edges softened by default so the
-   motion bends instead of tearing). For layers mode, `image_cutout` with `plate: true` → `<stem>_cut.png`,
-   `<stem>_mask.png`, `<stem>_plate.png`. Pass a whole Short's stills at once: they share one model load.
-2. `parallax` on the original image. It finds those files by name.
-   - `mode: depth` (default) moves every pixel by its depth: a real 3D feel on photos of places (houses,
-     streets, rooms). Keep `strength` near 1; higher values stretch the edges between near and far.
-   - `mode: layers` slides the cutout over the filled-in background. Only for one clean, fully cut-out
-     subject (a person, a product on a plain background): on a house photo the cutout leaves bushes and
-     leaves behind, and the filled background is smeary.
-   - `move`: push-in, pull-out, pan-left/right/up/down, drift. `size`: `1080x1920` (default), `1920x1080`,
-     any `WxH`, or `source`. A landscape photo in a vertical frame is cover-cropped around `center`.
-
-Renders run in the render worker's Chrome with a software GPU: about 25 s for 3 s of 1080×1920.
 
 ## Cloned voices
 
