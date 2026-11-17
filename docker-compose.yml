@@ -6,9 +6,9 @@
 #   docker compose up -d whisperx                   restart one tool
 #   docker compose logs -f gateway                  follow one service's log
 #
-# Settings come from .env next to this file. The GPU workers (whisperx, stable-audio, tts, voice-clone, vision) are in
+# Settings come from .env next to this file. The GPU workers (whisperx, stable-audio, tts, voice-clone) are in
 # the "gpu" profile, on by default via COMPOSE_PROFILES=gpu in .env. Without an NVIDIA GPU, leave
-# COMPOSE_PROFILES empty: ffmpeg, HyperFrames renders and Shorts still work.
+# COMPOSE_PROFILES empty: ffmpeg and the Shorts helpers still work.
 # FLUX image generation (comfyui + its image worker) is the separate "flux" profile, because its models are ~11 GB:
 # COMPOSE_PROFILES=gpu,flux turns it on.
 
@@ -120,21 +120,6 @@ services:
     <<: *gpu
     restart: unless-stopped
 
-  vision:
-    build:
-      context: workers
-      dockerfile: Dockerfile.gpu
-      target: vision
-    image: ghcr.io/johanduran/media-toolbox-vision:${TOOLBOX_VERSION:-latest}
-    profiles: [gpu]
-    volumes: *host-mounts
-    environment:
-      <<: *worker-env
-      # Both models are public; an expired saved token makes downloads fail with 401.
-      HF_HUB_DISABLE_IMPLICIT_TOKEN: "1"
-    <<: *gpu
-    restart: unless-stopped
-
   render:
     build:
       context: workers
@@ -149,8 +134,6 @@ services:
       FONTS_DIR: /fonts
       PYTHONUNBUFFERED: "1"
       DO_NOT_TRACK: "1"
-      HYPERFRAMES_TELEMETRY_DISABLED: "1"
-    shm_size: "2gb"   # Chrome needs more than Docker's 64 MB default
     restart: unless-stopped
 
   # --- FLUX image generation ("flux" profile) ------------------------------------------------------------

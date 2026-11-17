@@ -27,8 +27,7 @@ WORKERS = {
     "stable-audio": {"url": "http://stable-audio:8000", "gpu": True, "title": "Stable Audio SFX"},
     "tts": {"url": "http://tts:8000", "gpu": True, "title": "Kokoro text to speech"},
     "voice-clone": {"url": "http://voice-clone:8000", "gpu": True, "title": "Chatterbox voice clone"},
-    "vision": {"url": "http://vision:8000", "gpu": True, "title": "Depth + cutout"},
     # The image worker itself has no GPU, but it fronts ComfyUI, which does: it takes part in the GPU lock.
     "image": {"url": "http://image:8000", "gpu": True, "title": "FLUX images (ComfyUI)", "profile": "flux"},
-    "render": {"url": "http://render:8000", "gpu": False, "title": "HyperFrames + ffmpeg render"},
+    "render": {"url": "http://render:8000", "gpu": False, "title": "ffmpeg + Shorts helpers"},
 }

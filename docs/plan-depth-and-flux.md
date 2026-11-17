@@ -1,5 +1,8 @@
 # Plan: depth + cutout and FLUX in the media toolbox
 
+> **Update (v0.4.0):** depth maps, cutouts and `parallax` were removed: they were used for one week on six
+> Shorts and the results looked cheap. FLUX (`image_generate`) stays. Kept as a record of the design.
+
 Status: **Phase 1 merged** (PR #3, 2026-10-26). **Phase 2 built and tested** on branch `flux-image` (2026-10-26). Phase 3 not started; Phase 4 done for Phase 1's tools (video-studio 0.4.0).
 
 Goal: two new capabilities inside the toolbox, under its one job queue and GPU lock:
