@@ -21,8 +21,8 @@ Windows paths; anything under the user's home folder works. Protected folders (r
 never go there): {', '.join(windows(p) for p in PROTECTED_DIRS) or 'none'}.
 Tools: transcribe (WhisperX), timeline_transcript, sfx_search / sfx_generate / sfx_mark / sfx_scan
 (Stable Audio + shared sound library at {windows(SFX_LIBRARY)}), speak (Kokoro TTS, the default),
-speak_clone (a cloned voice from a voice profile, Chatterbox Turbo), render_hyperframes, ffmpeg, ffprobe, vertical Shorts from a short.json spec (short_info / short_build /
-short_preview / short_frames), stills to motion (image_depth / image_cutout / parallax), FLUX images
+speak_clone (a cloned voice from a voice profile, Chatterbox Turbo), render_hyperframes, ffmpeg, ffprobe, Shorts helpers (short_info, short_frames; short_build / short_preview are
+deprecated: the MangoAI editor previews and renders short.json projects now), stills to motion (image_depth / image_cutout / parallax), FLUX images
 (image_generate), plus job_status / wait_for_job / list_jobs / cancel_job.
 Every tool is optional: use one only when the task needs it. When you need a sound, search the library before
 generating. Dashboard: {PUBLIC_URL}"""
@@ -182,7 +182,8 @@ def build_mcp(runner: Runner) -> FastMCP:
     @mcp.tool()
     async def short_build(project_dir: str, parts: list[str] | None = None, only: list[str] | None = None,
                           wait_seconds: float = 900) -> dict:
-        """Build a vertical Short (1080x1920, 30 fps) from <project_dir>\\short.json: one MP4 per shot (V1),
+        """DEPRECATED: open the project in MangoAI and export there (mangoai project_open / export); kept for
+        old projects. Build a vertical Short (1080x1920, 30 fps) from <project_dir>\\short.json: one MP4 per shot (V1),
         the graphics + word-by-word captions overlay (V2, ProRes 4444 with alpha), the narration leveled to
         about -14 LUFS (A1) and the music/SFX bed (A2). parts: any of shots, overlay, audio (default all);
         only: rebuild just these shots. The result's 'timeline' says where each file goes in Resolve
@@ -191,7 +192,7 @@ def build_mcp(runner: Runner) -> FastMCP:
 
     @mcp.tool()
     async def short_preview(project_dir: str, wait_seconds: float = 600) -> dict:
-        """Composite a built Short (shots + overlay + audio) into <project>\\edit\\preview.mp4 and a contact
+        """DEPRECATED: MangoAI previews short.json projects live (mangoai project_open). Composite a built Short (shots + overlay + audio) into <project>\\edit\\preview.mp4 and a contact
         sheet with one frame per shot (preview_sheet.jpg), to check it before assembling in Resolve."""
         return await run("short_preview", {"project_dir": project_dir}, wait_seconds)
 

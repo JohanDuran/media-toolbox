@@ -6,11 +6,17 @@ the narration transcript and the screen recordings; the toolbox builds everythin
 | Tool (MCP / dashboard) | What it does |
 |---|---|
 | `short_info` | Reads the spec: length, every shot with its start/end/record frame, which outputs exist. Instant. |
-| `short_build` | Builds the shots (V1), the graphics + captions overlay (V2), the narration (A1) and the music/SFX bed (A2). `only` rebuilds single shots. |
-| `short_preview` | Composites everything with sound into `edit/preview.mp4` + a contact sheet. |
+| `short_build` | *Deprecated (use MangoAI).* Builds the shots (V1), the graphics + captions overlay (V2), the narration (A1) and the music/SFX bed (A2). `only` rebuilds single shots. |
+| `short_preview` | *Deprecated (use MangoAI).* Composites everything with sound into `edit/preview.mp4` + a contact sheet. |
 | `short_frames` | A labelled grid of frames from a recording, for finding crops and moments. |
 
 The dashboard's **Shorts** page lists every folder with a `short.json` under `SHORTS_ROOT`.
+
+**Rendering moved to MangoAI.** The [MangoAI editor](https://github.com/JohanDuran/MangoAI) opens a folder with a
+`short.json`, plays it live, lets you and Claude edit it, and exports the final MP4 (only changed parts re-render).
+Its output matches `short_preview` (checked on four Shorts: same length, loudness within 0.3 LU, SSIM ≥ 0.989).
+The toolbox keeps the GPU models (voice, transcription, sounds, images) and this spec format; `short_build` /
+`short_preview` still work for old projects but aren't developed further.
 
 ## The idea: everything is anchored to words
 

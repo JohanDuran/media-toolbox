@@ -15,7 +15,8 @@ as an MCP server, from any project.
 | `image_generate` | image → comfyui | GPU | FLUX.1 [dev] images (GGUF Q4 + Turbo LoRA, 8 steps) through a pinned ComfyUI. Optional `flux` profile. See [FLUX images](#flux-images) |
 | `image_depth`, `image_cutout` | vision | GPU | Depth maps (Depth Anything V2 Small) and subject cutouts + background plates (BiRefNet) for stills |
 | `parallax` | render | CPU | One still → a moving 2.5D camera shot (push-in, pull-out, pans, drift), from the cutout + plate or the depth map. See [Stills to motion](#stills-to-motion) |
-| `short_info`, `short_build`, `short_preview`, `short_frames` | render | CPU | Vertical Shorts (1080×1920) built from a `short.json` spec: shots from screen recordings, graphics + word-by-word captions, voice and music/SFX, all timed to the narration's words. See [docs/short-spec.md](docs/short-spec.md) |
+| `short_info`, `short_frames` | render | CPU | Helpers for `short.json` Shorts: read a spec, grab labelled frame grids from a recording. See [docs/short-spec.md](docs/short-spec.md) |
+| `short_build`, `short_preview` | render | CPU | **Deprecated**: [MangoAI](https://github.com/JohanDuran/MangoAI) now previews, edits and renders `short.json` projects (same look, −14 LUFS). Kept working for old projects |
 
 Dashboard: **http://localhost:8765**. MCP: **http://localhost:8765/mcp**.
 

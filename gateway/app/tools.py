@@ -390,6 +390,7 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
     ),
     Tool(
         "short_build", "Build Short", "render", "short_build", False,
+        "Deprecated: MangoAI renders Shorts now (open the folder in MangoAI and export); kept for old projects. "
         "Build a vertical Short (1080x1920) from the project's short.json: one MP4 per shot (V1), the graphics "
         "and captions overlay (V2, transparent), the leveled narration (A1) and the music/SFX bed (A2). Returns "
         "where each file goes on the Resolve timeline.",
@@ -402,6 +403,7 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
     ),
     Tool(
         "short_preview", "Preview Short", "render", "short_preview", False,
+        "Deprecated: MangoAI previews Shorts live. "
         "Composite the built shots, overlay and audio into edit/preview.mp4, plus a contact sheet with one frame "
         "per shot (edit/preview_sheet.jpg). Build first.",
         [Param("project_dir", "dir_in", "Project folder", True, help="Folder with short.json")],
