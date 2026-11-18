@@ -1,5 +1,10 @@
 # Media toolbox
 
+> **Part of [video-studio](https://github.com/JohanDuran/video-studio).** Three repos work together: the video-studio
+> plugin (the place to start), the [media-toolbox](https://github.com/JohanDuran/media-toolbox) and
+> [MangoAI](https://github.com/JohanDuran/MangoAI). To use them, install the plugin and run `/studio-setup`; Claude
+> sets up the rest. Changes here can affect the other two: see [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md).
+
 Free, local media tools in Docker, behind one gateway that you open in the browser and Claude calls
 as an MCP server, from any project.
 
@@ -59,6 +64,7 @@ MangoAI also calls this toolbox from its Toolbox tab (sounds, voice lines, trans
 media-toolbox/
 ├── .env.example          settings template; install.ps1 turns it into .env (git-ignored)
 ├── install.ps1           one-step setup on Windows
+├── get.ps1               clone-free install of one release (what /studio-setup runs)
 ├── docker-compose.yml    all services
 ├── docs/short-spec.md    the short.json format for vertical Shorts
 ├── gateway/
@@ -83,6 +89,17 @@ media-toolbox/
 
 ## Quick install
 
+**With Claude (recommended):** install the video-studio plugin (below) and run `/studio-setup`. Claude installs the
+release the plugin is tested with, no clone needed.
+
+**By hand, no clone:** one release, into `%USERPROFILE%\.video-studio\media-toolbox`:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/JohanDuran/media-toolbox/v0.5.0/get.ps1))) -Version v0.5.0
+```
+
+**From a clone** (development, or to build the images yourself):
+
 ```bash
 git clone https://github.com/JohanDuran/media-toolbox
 ```
@@ -91,10 +108,13 @@ git clone https://github.com/JohanDuran/media-toolbox
 powershell -ExecutionPolicy Bypass -File media-toolbox\install.ps1
 ```
 
+`get.ps1` downloads `install.ps1`, `docker-compose.yml`, `.env.example` and `docs/short-spec.md` for that tag and runs
+`install.ps1 -Version <tag>`; pass it the same options. Upgrade by running it again with a newer `-Version`.
 `install.ps1` checks Docker and your GPU, creates your studio folder (default
 `%USERPROFILE%\media-studio`, change it with `-StudioDir`), writes `.env`, pulls the prebuilt images from
 `ghcr.io` and starts everything. Options: `-RecordingsDir` (your raw recordings, kept read-only; default `media-studio\recordings`),
-`-NoGpu`, `-Build` (build the images yourself), `-Force` (rewrite `.env`). It's safe to run again.
+`-NoGpu`, `-Version vX.Y.Z` (pin the image release), `-Build` (build the images yourself; clone only), `-Force`
+(rewrite `.env`). It's safe to run again. The running release shows as `version` in `/api/state` and `toolbox_status`.
 
 Sound effects use Stable Audio Open, which is gated on Hugging Face: accept its license on the
 [model page](https://huggingface.co/stabilityai/stable-audio-open-1.0) and run `hf auth login` once
@@ -132,7 +152,7 @@ Job tools wait for the result; a long job returns its id, and `wait_for_job` pic
 
 ## Everyday commands
 
-Run these in this folder.
+Run these in the toolbox folder (the clone, or `%USERPROFILE%\.video-studio\media-toolbox` for the clone-free install).
 
 ```bash
 docker compose up -d
@@ -146,7 +166,8 @@ docker compose ps
 docker compose logs -f gateway
 ```
 
-Update to the latest images:
+Update the images for the release `TOOLBOX_VERSION` in `.env` names (to change release, run `get.ps1` or
+`install.ps1 -Version` with the new tag; with the plugin, `/studio-setup update`):
 
 ```bash
 docker compose pull

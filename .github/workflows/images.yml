@@ -60,6 +60,7 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           target: ${{ matrix.target }}
+          build-args: TOOLBOX_BUILD_VERSION=${{ github.ref_name }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

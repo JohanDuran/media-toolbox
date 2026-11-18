@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import library, shorts
-from .config import HOST_HOME, OUTPUTS_DIR, PROTECTED_DIRS, PUBLIC_URL, SFX_LIBRARY, WEB_DIR, WORKERS
+from .config import HOST_HOME, OUTPUTS_DIR, PROTECTED_DIRS, PUBLIC_URL, SFX_LIBRARY, TOOLBOX_VERSION, WEB_DIR, WORKERS
 from .db import JobDB
 from .mcp_tools import build_mcp
 from .paths import PathError, to_container, windows
@@ -46,7 +46,7 @@ def bad_request(e: Exception) -> HTTPException:
 
 @app.get("/api/state")
 def state():
-    return {**runner.state(), "config": {
+    return {**runner.state(), "version": TOOLBOX_VERSION, "config": {
         "host_home": windows(HOST_HOME), "outputs_dir": windows(OUTPUTS_DIR), "sfx_library": windows(SFX_LIBRARY),
         "protected_dirs": [windows(d) for d in PROTECTED_DIRS], "mcp_url": f"{PUBLIC_URL}/mcp"}}
 

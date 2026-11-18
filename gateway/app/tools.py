@@ -281,7 +281,7 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
         "Numbers are spelled out first so they're read correctly. Outputs carry Resemble's inaudible AI watermark.",
         [
             Param("text", "longtext", "Text", True, help="Blank lines split paragraphs"),
-            Param("voice", "text", "Voice profile", help=f"Name of a .wav in {VOICES_DIR}, e.g. jdkoder"),
+            Param("voice", "text", "Voice profile", help=f"Name of a .wav in {VOICES_DIR}, e.g. my-channel"),
             Param("ref_path", "path_in", "Reference .wav", help="Instead of a profile: any clean speech clip"),
             Param("pause", "number", "Pause between paragraphs (s)", default=0.35),
             Param("spell_numbers", "boolean", "Spell numbers out", default=True,
