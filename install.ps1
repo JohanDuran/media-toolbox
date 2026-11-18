@@ -7,8 +7,13 @@
   powershell -ExecutionPolicy Bypass -File .\install.ps1
   powershell -ExecutionPolicy Bypass -File .\install.ps1 -StudioDir D:\media-studio -RecordingsDir D:\Recordings
   powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoGpu     # no NVIDIA card: CPU tools only
+  powershell -ExecutionPolicy Bypass -File .\install.ps1 -Version v0.5.0   # pin the image release
 
-  Safe to run again: an existing .env is kept (use -Force to rewrite it).
+  Safe to run again: an existing .env is kept (use -Force to rewrite it); -Version always updates TOOLBOX_VERSION.
+
+  No clone needed: get.ps1 downloads this script, docker-compose.yml and .env.example for one release into
+  %USERPROFILE%\.video-studio\media-toolbox and runs it. The video-studio plugin's /studio-setup does that for you.
+  This toolbox is one of three pieces (video-studio plugin, media-toolbox, MangoAI): see docs/ECOSYSTEM.md.
 #>
 param(
     # Where your video projects, sound library and generated files live.
@@ -16,6 +21,8 @@ param(
     # Your raw recordings (any recorder: point it here). The toolbox reads them but never writes there.
     [string]$RecordingsDir = (Join-Path $StudioDir "recordings"),
     [int]$Port = 8765,
+    # Image release to pull (v0.5.0 ...). Empty: keep what .env says (latest for a new .env).
+    [string]$Version = "",
     [switch]$NoGpu,
     [switch]$Build,
     [switch]$Force
@@ -81,7 +88,9 @@ if ((Test-Path .env) -and -not $Force) {
         "SFX_LIBRARY"      = (Slash (Join-Path $StudioDir "sfx_library"))
         "SHORTS_ROOT"      = (Slash $StudioDir)
         "PROTECTED_DIRS"   = (Slash $RecordingsDir)
+        "VOICES_DIR"       = (Slash (Join-Path $StudioDir "voices"))
     }
+    if ($Version) { $values["TOOLBOX_VERSION"] = $Version }
     $lines = foreach ($line in (Get-Content .env.example)) {
         if ($line -match '^([A-Z_]+)=') {
             $key = $Matches[1]
@@ -93,6 +102,15 @@ if ((Test-Path .env) -and -not $Force) {
     [System.IO.File]::WriteAllLines((Join-Path $PSScriptRoot ".env"), $lines, (New-Object System.Text.UTF8Encoding $false))
     Ok "Wrote .env"
 }
+if ($Version) {
+    # Pin the release even when .env was kept, so the images match the video-studio plugin's compatibility table.
+    $envFile = Join-Path $PSScriptRoot ".env"
+    $lines = @(Get-Content $envFile | ForEach-Object { if ($_ -match '^TOOLBOX_VERSION=') { "TOOLBOX_VERSION=$Version" } else { $_ } })
+    if (-not ($lines -match '^TOOLBOX_VERSION=')) { $lines += "TOOLBOX_VERSION=$Version" }
+    [System.IO.File]::WriteAllLines($envFile, $lines, (New-Object System.Text.UTF8Encoding $false))
+    Ok "Images pinned to $Version"
+}
+New-Item -ItemType Directory -Force -Path (Join-Path $StudioDir "voices") | Out-Null
 
 # 4. Hugging Face (Stable Audio is gated) --------------------------------------------------
 if ($gpu) {
@@ -110,11 +128,16 @@ if ($gpu) {
 
 # 5. Images and start ---------------------------------------------------------------------
 Step "Images (first time: several GB, takes a while)"
+# A clone has the Dockerfiles; the clone-free install (get.ps1) only has the compose file, so it can only pull.
+$canBuild = Test-Path (Join-Path $PSScriptRoot "workers")
+if ($Build -and -not $canBuild) { Fail "-Build needs a clone of the repo (git clone https://github.com/JohanDuran/media-toolbox)." }
 if ($Build) {
     docker compose up -d --build
 } else {
     docker compose pull
-    if ($LASTEXITCODE -ne 0) {
+    if ($LASTEXITCODE -ne 0 -and -not $canBuild) {
+        Fail "Couldn't pull the prebuilt images. Check your internet connection and that the release exists: https://github.com/JohanDuran/media-toolbox/releases"
+    } elseif ($LASTEXITCODE -ne 0) {
         Warn "Couldn't pull prebuilt images; building them here instead (~10 GB download)."
         docker compose up -d --build
     } else {
@@ -136,7 +159,9 @@ if (-not $up) { Fail "The gateway didn't answer at $url. Check: docker compose l
 Ok "Dashboard: $url"
 
 Write-Host ""
-Write-Host "Done. Next, install the Claude Code plugin from this terminal:" -ForegroundColor Cyan
+Write-Host "Done." -ForegroundColor Cyan
+if ($env:VIDEO_STUDIO_SETUP) { exit 0 }   # run by /studio-setup: it does the rest
+Write-Host "Next, install the Claude Code plugin from this terminal:" -ForegroundColor Cyan
 Write-Host "  claude plugin marketplace add JohanDuran/video-studio"
 Write-Host "  claude plugin install video-studio@video-studio"
 Write-Host "Then start a new Claude Code session and run /studio-setup."

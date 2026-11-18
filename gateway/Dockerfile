@@ -9,7 +9,8 @@ COPY gateway/web/ ./
 RUN npm run build
 
 FROM python:3.12-slim-bookworm
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ARG TOOLBOX_BUILD_VERSION=dev
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TOOLBOX_BUILD_VERSION=${TOOLBOX_BUILD_VERSION}
 COPY --from=ghcr.io/astral-sh/uv:0.12.10 /uv /usr/local/bin/uv
 COPY gateway/requirements.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/uv uv pip install --system -r /tmp/requirements.txt

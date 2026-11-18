@@ -17,6 +17,9 @@ PROTECTED_DIRS = [_norm(p) for p in os.environ.get("PROTECTED_DIRS", "").split("
 # Where the dashboard looks for Shorts projects (folders with a short.json, up to 2 levels deep).
 SHORTS_ROOT = _norm(os.environ.get("SHORTS_ROOT", f"{HOST_HOME}/Documents/Projects"))
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "http://localhost:8765")
+# The release this image was built from (baked in by the images workflow; "dev" for a local build).
+# The video-studio plugin checks it against its compatibility table (see docs/ECOSYSTEM.md).
+TOOLBOX_VERSION = os.environ.get("TOOLBOX_BUILD_VERSION", "dev")
 DB_PATH = os.environ.get("DB_PATH", "/cache/gateway/jobs.sqlite")
 WEB_DIR = os.environ.get("WEB_DIR", "/app/web")
 

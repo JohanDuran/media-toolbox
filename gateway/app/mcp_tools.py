@@ -12,7 +12,7 @@ from typing import Literal
 from mcp.server.fastmcp import FastMCP
 
 from . import library, shorts
-from .config import PROTECTED_DIRS, PUBLIC_URL, SFX_LIBRARY
+from .config import PROTECTED_DIRS, PUBLIC_URL, SFX_LIBRARY, TOOLBOX_VERSION
 from .paths import PathError, windows
 from .runner import Runner
 
@@ -58,9 +58,10 @@ def build_mcp(runner: Runner) -> FastMCP:
 
     @mcp.tool()
     async def toolbox_status() -> dict:
-        """Workers (up / busy / model loaded), GPU memory and job counts."""
+        """Toolbox version, workers (up / busy / model loaded), GPU memory and job counts."""
         s = runner.state()
         return {
+            "version": TOOLBOX_VERSION,
             "workers": [{k: w[k] for k in ("name", "up", "busy", "job_id", "model_loaded", "error")}
                         for w in s["workers"]],
             "gpu": s["gpu"], "jobs": s["counts"], "dashboard": PUBLIC_URL,
